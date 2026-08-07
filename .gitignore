@@ -7,3 +7,4 @@ garden/.trash/
 __pycache__/
 *.py[cod]
 .coverage
+.openviking/
