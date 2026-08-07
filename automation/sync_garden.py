@@ -122,9 +122,12 @@ def main() -> int:
     try:
         snapshot = client.snapshot.commit(message=f"before garden sync {datetime.now(timezone.utc).isoformat()}", author_name="Agent Garden", author_email="agent-garden@localhost")
         apply_changes(client, changes, old, new, wait=args.wait)
+        # The mutations have been accepted at this point. Persist their hashes before
+        # waiting for semantic enrichment so a slow VLM task cannot cause a duplicate
+        # submission on the next tick.
+        save_manifest(new)
         if args.wait:
             client.wait_processed(timeout=600)
-        save_manifest(new)
         report["snapshot"] = snapshot
     finally:
         client.close()
