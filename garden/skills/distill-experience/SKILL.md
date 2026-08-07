@@ -30,6 +30,8 @@ Search trajectories and experiences semantically, then group candidates by the b
 
 For every candidate, capture source URIs and one concrete counterexample or failure condition. Read [promotion-policy.md](references/promotion-policy.md) before writing or promoting anything.
 
+Record each independent outcome with `scripts/promotion_gate.py observe`, then run `evaluate`. Treat its route as a hard ceiling: never promote beyond `provisional_experience`, `validated_experience`, or `review` when the gate returns that route. A Skill may be created only when the gate returns `promote_skill` after `--skill-validation passed`.
+
 ## Route candidates
 
 - Write explicit user preferences, entities, and events to OpenViking memory.
