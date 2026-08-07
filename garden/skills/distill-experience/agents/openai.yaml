@@ -1,0 +1,4 @@
+interface:
+  display_name: "Distill Experience"
+  short_description: "Turn repeated trajectories into durable knowledge and skills"
+  default_prompt: "Use $distill-experience to inspect new OpenViking trajectories and promote reusable knowledge safely."

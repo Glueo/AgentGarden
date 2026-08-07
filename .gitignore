@@ -1,0 +1,9 @@
+.DS_Store
+.runtime/*
+!.runtime/.gitkeep
+garden/.obsidian/workspace*.json
+garden/.trash/
+*.log
+__pycache__/
+*.py[cod]
+.coverage
