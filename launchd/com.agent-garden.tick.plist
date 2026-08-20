@@ -15,10 +15,16 @@
   <true/>
   <key>WorkingDirectory</key>
   <string>/Users/gwen/project.localized/agent-garden</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NO_PROXY</key>
+    <string>127.0.0.1,localhost</string>
+    <key>no_proxy</key>
+    <string>127.0.0.1,localhost</string>
+  </dict>
   <key>StandardOutPath</key>
   <string>/Users/gwen/Library/Logs/AgentGarden/tick.log</string>
   <key>StandardErrorPath</key>
   <string>/Users/gwen/Library/Logs/AgentGarden/tick-error.log</string>
 </dict>
 </plist>
-

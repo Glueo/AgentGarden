@@ -12,10 +12,14 @@ def main() -> int:
     project = Path(__file__).resolve().parents[1]
     sync = subprocess.run([sys.executable, str(project / "automation/sync_garden.py")], cwd=project, check=False)
     hermes = Path.home() / ".local/bin/hermes"
-    tick = subprocess.run([str(hermes), "cron", "tick"], cwd=project, check=False)
-    return sync.returncode or tick.returncode
+    default_tick = subprocess.run([str(hermes), "cron", "tick"], cwd=project, check=False)
+    dream_tick = subprocess.run(
+        [str(hermes), "-p", "dreamer", "cron", "tick"],
+        cwd=project,
+        check=False,
+    )
+    return sync.returncode or default_tick.returncode or dream_tick.returncode
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

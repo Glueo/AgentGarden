@@ -5,7 +5,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "garden/skills/distill-experience/scripts/promotion_gate.py"
+MODULE_PATH = Path(__file__).resolve().parents[1] / "automation/promotion_gate.py"
 SPEC = importlib.util.spec_from_file_location("promotion_gate", MODULE_PATH)
 promotion_gate = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader

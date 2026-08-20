@@ -16,6 +16,7 @@ PROJECT = Path(__file__).resolve().parents[1]
 HERMES_CONFIG = HOME / ".hermes/config.yaml"
 HERMES_ENV = HOME / ".hermes/.env"
 DREAMER_PROFILE_CONFIG = HOME / ".hermes/profiles/dreamer/config.yaml"
+DREAMER_SKILLS = HOME / ".hermes/profiles/dreamer/skills"
 OV_DIR = HOME / ".openviking"
 OV_CONFIG = OV_DIR / "ov.conf"
 OVCLI_CONFIG = OV_DIR / "ovcli.conf"
@@ -42,6 +43,32 @@ def first_provider(config: dict, *names: str) -> dict:
         except RuntimeError:
             continue
     raise RuntimeError(f"Hermes provider not found: {', '.join(names)}")
+
+
+def patch_skill_ownership(config: dict, *, dreamer_owner: bool) -> dict:
+    """Keep Dreamer as the only mutable source for distilled skills."""
+    skills = {**(config.get("skills") or {})}
+    raw_external = skills.get("external_dirs") or []
+    if isinstance(raw_external, str):
+        raw_external = [raw_external]
+    garden_skills = str(PROJECT / "garden/skills")
+    dreamer_skills = str(DREAMER_SKILLS)
+    external = [
+        str(item) for item in raw_external
+        if str(item) not in {garden_skills, dreamer_skills}
+    ]
+    if not dreamer_owner:
+        external.append(dreamer_skills)
+    skills.update({
+        "external_dirs": list(dict.fromkeys(external)),
+        # Per-chat nudges stay off. The scheduled Dream is the sole writer.
+        "creation_nudge_interval": 0,
+        # Dreamer can maintain its local skills unattended; consumers cannot
+        # mutate those external skills through autonomous curation.
+        "write_approval": not dreamer_owner,
+    })
+    config["skills"] = skills
+    return config
 
 
 def patch_hermes_config(config: dict) -> dict:
@@ -84,15 +111,7 @@ def patch_hermes_config(config: dict) -> dict:
         **(config.get("terminal") or {}),
         "cwd": str(PROJECT),
     }
-    config["skills"] = {
-        **(config.get("skills") or {}),
-        "external_dirs": [str(PROJECT / "garden/skills")],
-        # Garden is the only durable Skill writer. Hermes may read its skills,
-        # but automatic post-turn reviews must not create an active local Skill
-        # from one conversation.
-        "creation_nudge_interval": 0,
-        "write_approval": True,
-    }
+    patch_skill_ownership(config, dreamer_owner=False)
     config["memory"] = {
         **(config.get("memory") or {}),
         "provider": "openviking",
@@ -161,12 +180,7 @@ def patch_dreamer_profile_config(config: dict) -> dict:
         "search_backend": "ddgs",
         "extract_backend": "tavily",
     }
-    config["skills"] = {
-        **(config.get("skills") or {}),
-        "external_dirs": [str(PROJECT / "garden/skills")],
-        "creation_nudge_interval": 0,
-        "write_approval": True,
-    }
+    patch_skill_ownership(config, dreamer_owner=True)
     return config
 
 
@@ -234,6 +248,17 @@ def main() -> int:
         write_private(
             DREAMER_PROFILE_CONFIG,
             yaml.safe_dump(dreamer_config, allow_unicode=True, sort_keys=False),
+        )
+    profiles_root = HOME / ".hermes/profiles"
+    for profile_config in sorted(profiles_root.glob("*/config.yaml")):
+        if profile_config == DREAMER_PROFILE_CONFIG:
+            continue
+        backup(profile_config)
+        profile = yaml.safe_load(profile_config.read_text(encoding="utf-8")) or {}
+        patch_skill_ownership(profile, dreamer_owner=False)
+        write_private(
+            profile_config,
+            yaml.safe_dump(profile, allow_unicode=True, sort_keys=False),
         )
     patch_env(HERMES_ENV, {"OPENVIKING_ENDPOINT": "http://127.0.0.1:1933", "OPENVIKING_ACCOUNT": "default", "OPENVIKING_USER": "gwen", "OPENVIKING_AGENT": "hermes"})
     remove_env_keys(HERMES_ENV, {"TERMINAL_CWD", "MESSAGING_CWD"})

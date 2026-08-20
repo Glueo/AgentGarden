@@ -21,3 +21,12 @@ topics: [agent-garden, dream, audit]
 - 同步与验证：使用 `conda run -n agent-garden python automation/sync_garden.py --wait`；测试使用 `conda run -n agent-garden python -m unittest discover -s tests -v`。
 - Git commit：本条目所在的 Dream commit（`HEAD`）。
 
+## 2026-08-20 Skill 归属迁移
+
+- 决策：按用户明确要求，Garden 不再保存可执行 Skill 或单独的 review 文件夹。Dreamer profile 的 `~/.hermes/profiles/dreamer/skills/` 成为自动蒸馏 Skill 的唯一可写源；主 Hermes、SOL、Qwen、Claude worker 通过 `skills.external_dirs` 只读加载。
+- 迁移 Skill：`algorithm-practice`（`83509e91c49251aad890422e12eaab1203d382f0f90d2d9f0b985de6cde46968`）、`distill-experience`（`0cf5c3d221580d80071f087787b4ec01bf14a8d63c8f31210acf3ef4608f8735`）、`hermes-health-audit`（`5a6aa8b27b715414093fed3a3c0facc3eb305f4dfaba6fe7b1bebc02f25cf94b`）、`hermes-model-orchestration`（`c7d0112045184098ecb055065bc5318c231a5bcffe442ea87fe6c05b3258c74e`）、`model-router`（`582f76152df80381fb272aef8fc34166e7c12418592e6bcdf0b50d506ed58f6f`）。哈希均为迁移后最终 `SKILL.md` 的 SHA-256。
+- 可恢复备份：`~/.hermes/skill-migration-backups/20260820-145303/`，包含 Garden 原源、Dreamer 旧版本、各 consumer 的同名副本、旧 usage 数据、CCSwitch 旧链接和迁移动作清单。
+- Review 路由：冲突、弱证据和高风险候选只保留在晋升门禁的 `review` 状态并进入 Dream 审计；不再创建 `garden/reviews/` 文件。
+- OpenViking：清理 10 个历史 Garden Skill 资源；同步前快照 `8982c4e5c11cd97ec0e7274a50d66348abe0524f`，安全重试复用了同一操作号，最终 dry-run 为 `changed: 0`。
+- 验证：5 个迁移后目录均通过 Skill 格式校验；完整测试集 27 项通过。`algorithm-practice` 与 `hermes-model-orchestration` 的独立前向测试通过；健康审计的前向测试发现并促成了对隐式写入、联网披露、原始日志/端点泄露和 SQLite WAL 限制的收紧，最终独立静态复验为 PASS。
+- Git commit：本条目所在的迁移 commit（`HEAD`）。

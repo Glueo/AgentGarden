@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "garden/skills/distill-experience/scripts/dream_state.py"
+MODULE_PATH = Path(__file__).resolve().parents[1] / "automation/dream_state.py"
 SPEC = importlib.util.spec_from_file_location("dream_state", MODULE_PATH)
 dream_state = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader

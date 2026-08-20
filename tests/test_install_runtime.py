@@ -48,7 +48,7 @@ class HermesConfigTests(unittest.TestCase):
         self.assertEqual(patched["terminal"]["cwd"], str(install_runtime.PROJECT))
         self.assertEqual(
             patched["skills"]["external_dirs"],
-            [str(install_runtime.PROJECT / "garden/skills")],
+            [str(install_runtime.DREAMER_SKILLS)],
         )
         self.assertEqual(patched["skills"]["creation_nudge_interval"], 0)
         self.assertTrue(patched["skills"]["write_approval"])
@@ -91,12 +91,27 @@ class HermesConfigTests(unittest.TestCase):
             [{"provider": "micu-api", "model": "gpt-5.6-sol"}],
         )
         self.assertEqual(patched["agent"]["api_max_retries"], 3)
+        self.assertEqual(patched["skills"]["external_dirs"], [])
+        self.assertEqual(patched["skills"]["creation_nudge_interval"], 0)
+        self.assertFalse(patched["skills"]["write_approval"])
+
+    def test_skill_ownership_preserves_unrelated_external_dirs(self):
+        config = {
+            "skills": {
+                "external_dirs": [
+                    "/shared/team-skills",
+                    str(install_runtime.PROJECT / "garden/skills"),
+                    str(install_runtime.DREAMER_SKILLS),
+                ]
+            }
+        }
+
+        patched = install_runtime.patch_skill_ownership(config, dreamer_owner=False)
+
         self.assertEqual(
             patched["skills"]["external_dirs"],
-            [str(install_runtime.PROJECT / "garden/skills")],
+            ["/shared/team-skills", str(install_runtime.DREAMER_SKILLS)],
         )
-        self.assertEqual(patched["skills"]["creation_nudge_interval"], 0)
-        self.assertTrue(patched["skills"]["write_approval"])
 
 
 if __name__ == "__main__":

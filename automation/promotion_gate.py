@@ -9,7 +9,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 STATE_PATH = Path(os.environ.get("AGENT_GARDEN_PROMOTION_STATE", PROJECT_ROOT / ".runtime/promotion-candidates.json"))
 STATE_VERSION = 2
 ROUTES = ("provisional_experience", "validated_experience", "promote_skill", "review")

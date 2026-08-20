@@ -15,4 +15,4 @@ topics: [agent-garden, system]
 - [[schema|笔记 Schema 与分类生长规则]]
 - [[dream-log|Dream 审计日志]]
 
-主题 Hub 只在内容形成稳定簇后生成。`wiki/`、`sources/` 和 `skills/` 是知识生命周期，不是学科分类。
+主题 Hub 只在内容形成稳定簇后生成。Garden 只保存 `wiki/`、`sources/` 与系统审计；可执行 Skill 由 Hermes Dreamer profile 管理。
