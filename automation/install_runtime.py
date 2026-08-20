@@ -12,9 +12,10 @@ from pathlib import Path
 import yaml
 
 HOME = Path.home()
-PROJECT = Path("/Users/gwen/project.localized/agent-garden")
+PROJECT = Path(__file__).resolve().parents[1]
 HERMES_CONFIG = HOME / ".hermes/config.yaml"
 HERMES_ENV = HOME / ".hermes/.env"
+DREAMER_PROFILE_CONFIG = HOME / ".hermes/profiles/dreamer/config.yaml"
 OV_DIR = HOME / ".openviking"
 OV_CONFIG = OV_DIR / "ov.conf"
 OVCLI_CONFIG = OV_DIR / "ovcli.conf"
@@ -34,6 +35,141 @@ def provider(config: dict, name: str) -> dict:
     raise RuntimeError(f"Hermes provider not found: {name}")
 
 
+def first_provider(config: dict, *names: str) -> dict:
+    for name in names:
+        try:
+            return provider(config, name)
+        except RuntimeError:
+            continue
+    raise RuntimeError(f"Hermes provider not found: {', '.join(names)}")
+
+
+def patch_hermes_config(config: dict) -> dict:
+    """Apply the reproducible, non-secret Agent Garden Hermes settings."""
+    config["custom_providers"] = [
+        item for item in config.get("custom_providers", [])
+        if item.get("name") != "huoshan"
+    ]
+
+    anyrouter = provider(config, "anyrouter")
+    models = anyrouter.get("models")
+    if not isinstance(models, dict):
+        models = {}
+    models.update({
+        "claude-opus-5": {
+            "name": "claude-opus-5",
+            "context_length": 1000000,
+        },
+        "claude-opus-4-8": {
+            "name": "claude-opus-4-8",
+            "context_length": 1000000,
+        },
+    })
+    anyrouter["models"] = models
+
+    config["model"] = {
+        **(config.get("model") or {}),
+        "default": "gpt-5.6-sol",
+        "provider": "anyrouter",
+        "api_mode": "codex_responses",
+    }
+    # The interactive coordinator uses Terra only after AnyRouter SOL is
+    # exhausted.  The Dream job runs in dreamer, whose independent profile
+    # keeps micu-api/gpt-5.6-sol as its fallback.
+    config["fallback_providers"] = [
+        {"provider": "micu-api", "model": "gpt-5.6-terra"}
+    ]
+
+    config["terminal"] = {
+        **(config.get("terminal") or {}),
+        "cwd": str(PROJECT),
+    }
+    config["skills"] = {
+        **(config.get("skills") or {}),
+        "external_dirs": [str(PROJECT / "garden/skills")],
+        # Garden is the only durable Skill writer. Hermes may read its skills,
+        # but automatic post-turn reviews must not create an active local Skill
+        # from one conversation.
+        "creation_nudge_interval": 0,
+        "write_approval": True,
+    }
+    config["memory"] = {
+        **(config.get("memory") or {}),
+        "provider": "openviking",
+    }
+    config["web"] = {
+        **(config.get("web") or {}),
+        # Keep keyless DDGS for search and use Tavily only for native extraction.
+        "search_backend": "ddgs",
+        "extract_backend": "tavily",
+    }
+    config["agent"] = {
+        **(config.get("agent") or {}),
+        # Retry each provider up to three times after its initial API attempt.
+        "api_max_retries": 3,
+    }
+    config["sessions"] = {
+        **(config.get("sessions") or {}),
+        # Soft-hide inactive history; never delete sessions automatically.
+        "auto_archive": True,
+        "auto_archive_days": 7,
+    }
+    auxiliary = {
+        **(config.get("auxiliary") or {}),
+        # Do not repeat the same failed auxiliary request before fallback.
+        "transient_retries": 0,
+    }
+    for task in ("title_generation", "approval", "compression", "memory_query_rewrite"):
+        auxiliary[task] = {
+            **(auxiliary.get(task) or {}),
+            "provider": "auto",
+            "fallback_chain": [
+                {"provider": "micu-api", "model": "gpt-5.6-sol"}
+            ],
+        }
+    config["auxiliary"] = auxiliary
+
+    for item in config.get("custom_providers", []):
+        item_models = item.get("models") or {}
+        if not isinstance(item_models, dict):
+            raise RuntimeError(f"Provider {item.get('name')} models must be a mapping")
+        for alias, model_config in item_models.items():
+            if not isinstance(model_config, dict) or not model_config.get("name"):
+                raise RuntimeError(
+                    f"Provider {item.get('name')} model {alias} is malformed"
+                )
+    return config
+
+
+def patch_dreamer_profile_config(config: dict) -> dict:
+    """Keep the dedicated Dream profile on SOL across both providers."""
+    config["model"] = {
+        **(config.get("model") or {}),
+        "default": "gpt-5.6-sol",
+        "provider": "anyrouter",
+        "api_mode": "codex_responses",
+    }
+    config["fallback_providers"] = [
+        {"provider": "micu-api", "model": "gpt-5.6-sol"}
+    ]
+    config["agent"] = {
+        **(config.get("agent") or {}),
+        "api_max_retries": 3,
+    }
+    config["web"] = {
+        **(config.get("web") or {}),
+        "search_backend": "ddgs",
+        "extract_backend": "tavily",
+    }
+    config["skills"] = {
+        **(config.get("skills") or {}),
+        "external_dirs": [str(PROJECT / "garden/skills")],
+        "creation_nudge_interval": 0,
+        "write_approval": True,
+    }
+    return config
+
+
 def write_private(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -51,9 +187,15 @@ def patch_env(path: Path, values: dict[str, str]) -> None:
     write_private(path, "\n".join(kept) + "\n")
 
 
+def remove_env_keys(path: Path, keys: set[str]) -> None:
+    existing = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    kept = [line for line in existing if not any(line.startswith(f"{key}=") for key in keys)]
+    write_private(path, "\n".join(kept) + "\n")
+
+
 def main() -> int:
     config = yaml.safe_load(HERMES_CONFIG.read_text(encoding="utf-8"))
-    camel = provider(config, "camel-openviking")
+    camel = first_provider(config, "camel-openviking", "camel")
     try:
         huoshan_key = provider(config, "huoshan").get("api_key")
     except RuntimeError:
@@ -81,16 +223,20 @@ def main() -> int:
     write_private(OVCLI_CONFIG, json.dumps(ovcli, ensure_ascii=False, indent=2) + "\n")
 
     backup(HERMES_CONFIG)
-    config["custom_providers"] = [item for item in config.get("custom_providers", []) if item.get("name") != "huoshan"]
-    anyrouter = provider(config, "anytouter")
-    anyrouter["models"] = {
-        "claude-opus-5": {"name": "claude-opus-5", "context_length": 1000000},
-        "claude-opus-4-8": {"name": "claude-opus-4-8", "context_length": 1000000},
-    }
-    config["skills"] = {**(config.get("skills") or {}), "external_dirs": [str(PROJECT / "garden/skills")]}
-    config["memory"] = {**(config.get("memory") or {}), "provider": "openviking"}
+    config = patch_hermes_config(config)
     write_private(HERMES_CONFIG, yaml.safe_dump(config, allow_unicode=True, sort_keys=False))
+    if DREAMER_PROFILE_CONFIG.exists():
+        backup(DREAMER_PROFILE_CONFIG)
+        dreamer_config = yaml.safe_load(
+            DREAMER_PROFILE_CONFIG.read_text(encoding="utf-8")
+        )
+        dreamer_config = patch_dreamer_profile_config(dreamer_config)
+        write_private(
+            DREAMER_PROFILE_CONFIG,
+            yaml.safe_dump(dreamer_config, allow_unicode=True, sort_keys=False),
+        )
     patch_env(HERMES_ENV, {"OPENVIKING_ENDPOINT": "http://127.0.0.1:1933", "OPENVIKING_ACCOUNT": "default", "OPENVIKING_USER": "gwen", "OPENVIKING_AGENT": "hermes"})
+    remove_env_keys(HERMES_ENV, {"TERMINAL_CWD", "MESSAGING_CWD"})
     print("Runtime configuration installed; secrets remained outside the project.")
     return 0
 

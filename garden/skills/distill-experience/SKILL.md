@@ -7,7 +7,7 @@ description: Inspect newly committed OpenViking trajectories, classify useful se
 
 Turn raw practice into durable assets without treating every plausible idea as truth. Keep trajectories in OpenViking; write only stable, useful outputs to the Garden.
 
-## Run the Dream gate
+## Capture new evidence
 
 From the project root, run:
 
@@ -22,15 +22,24 @@ python garden/skills/distill-experience/scripts/dream_state.py record SESSION_KE
 python garden/skills/distill-experience/scripts/dream_state.py record SESSION_KEY --not-useful
 ```
 
-Stop after the lightweight scan unless `check` reports `due: true`. A user request to run a full Dream overrides the time/count gate, but never overrides the safety rules.
-
-## Build evidence groups
-
-Search trajectories and experiences semantically, then group candidates by the behavior or claim that would be reused. Treat two traces as independent only when they are separate attempts and the later success did not merely copy the earlier output.
+For each newly useful session, search trajectories and experiences semantically, then group reusable candidates by behavior or claim. Treat two traces as independent only when they are separate attempts and the later success did not merely copy the earlier output. Do this lightweight capture on every scheduled scan; do not wait for the periodic full-Dream threshold.
 
 For every candidate, capture source URIs and one concrete counterexample or failure condition. Read [promotion-policy.md](references/promotion-policy.md) before writing or promoting anything.
 
-Record each independent outcome with `scripts/promotion_gate.py observe`, then run `evaluate`. Treat its route as a hard ceiling: never promote beyond `provisional_experience`, `validated_experience`, or `review` when the gate returns that route. A Skill may be created only when the gate returns `promote_skill` after `--skill-validation passed`.
+Record each independent outcome with `scripts/promotion_gate.py observe`. A single success remains provisional and must not change an active Skill.
+
+## Run the Dream gates
+
+After recording all new sessions and candidate observations, run both gates:
+
+```bash
+python garden/skills/distill-experience/scripts/dream_state.py check
+python garden/skills/distill-experience/scripts/promotion_gate.py ready
+```
+
+Run a full Dream when the periodic gate reports `due: true` or the event gate reports `ready: true`. The event gate becomes ready when a candidate has at least two independent successful trajectories not handled by an earlier Dream. Stop after the lightweight scan when neither gate is ready. A user request to run a full Dream overrides these timing gates, but never overrides the evidence or safety rules.
+
+For every candidate handled by the full Dream, run `evaluate`. Treat its route as a hard ceiling: never promote beyond `provisional_experience`, `validated_experience`, or `review` when the gate returns that route. A Skill may be created only when the gate returns `promote_skill` after `--skill-validation passed`.
 
 ## Route candidates
 
@@ -56,5 +65,6 @@ Before changing OpenViking or the Garden, create an OpenViking snapshot. After a
 2. Append a concise entry to `garden/_system/dream-log.md`.
 3. Stage only this Dream's Garden changes and create one Git commit.
 4. Run `python garden/skills/distill-experience/scripts/dream_state.py complete --snapshot SNAPSHOT_ID --git-commit COMMIT_ID`.
+5. For each event candidate durably recorded by that commit, run `python garden/skills/distill-experience/scripts/promotion_gate.py resolve CANDIDATE --route ROUTE`.
 
-If validation, synchronization, or Git commit fails, keep the candidate provisional or in review and do not mark the Dream complete.
+Resolve an event only after its outcome is durable in the Garden audit. If validation, synchronization, or Git commit fails, keep the candidate provisional or in review, do not mark the Dream complete, and do not resolve the event; it must remain ready for retry.
