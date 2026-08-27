@@ -30,3 +30,14 @@ topics: [agent-garden, dream, audit]
 - OpenViking：清理 10 个历史 Garden Skill 资源；同步前快照 `8982c4e5c11cd97ec0e7274a50d66348abe0524f`，安全重试复用了同一操作号，最终 dry-run 为 `changed: 0`。
 - 验证：5 个迁移后目录均通过 Skill 格式校验；完整测试集 27 项通过。`algorithm-practice` 与 `hermes-model-orchestration` 的独立前向测试通过；健康审计的前向测试发现并促成了对隐式写入、联网披露、原始日志/端点泄露和 SQLite WAL 限制的收紧，最终独立静态复验为 PASS。
 - Git commit：本条目所在的迁移 commit（`HEAD`）。
+
+## 2026-08-27 Dream
+
+- 输入会话：`20260819_221044_493970`、`20260820_131752_ccf700`、`20260821_120946_0b47bc`，三者均含工具调用、非平凡产物、显式知识或失败复盘；本轮没有尚未登记的新会话，周期门禁因距上次完整 Dream 已满 7 天而触发。
+- OpenViking 快照（变更前）：`7c0d5ad4c02e5fac1a1b7ff4f45ae1dcd2b2d2d6`。
+- 稳定知识：接纳并补全 `garden/wiki/算法复习.md` 与 `garden/wiki/C++算法常用库函数.md` 的来源 URI；内容来自 `viking://user/gwen/sessions/20260820_131752_ccf700/history/archive_002`，反例边界是无关联条目不强制建立双向链接、未实际遗忘的 API 不进入专门参考页。
+- 候选路由：`hermes-ansi-garbled-output-troubleshooting`、`hermes-session-profile-isolation-explanation`、`algorithm-coaching-wiki-crosslinks` 均只有一次独立成功，保持 provisional experience；`headless-dream-session-enumeration` 只有失败轨迹，保持 provisional；`synthetic-algorithm-fix` 虽有两条合成成功轨迹，但缺少合格的隔离前向验证，门禁上限为 validated experience。
+- Skill：没有候选达到“两次独立成功 + 隔离前向测试通过”，因此未创建或修改 Dreamer Hermes Skill；无 Skill 路径、哈希或备份项。
+- 审查：无冲突或 mandatory-review 候选；未写入凭证、原始私密会话或其他秘密。
+- 验证：运行完整单元测试；运行 `automation/sync_garden.py --wait` 并复查 dry-run 为零变更。
+- Git commit：本条目所在的 Dream commit（`HEAD`）。
