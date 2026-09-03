@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
+import subprocess
+import sys
+import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -82,6 +87,61 @@ class PromotionGateTests(unittest.TestCase):
             [item["candidate"] for item in promotion_gate.ready_candidates(state)],
             ["ready"],
         )
+
+    def test_unknown_validation_state_is_rejected(self):
+        with self.assertRaises(ValueError):
+            promotion_gate.decision(self.candidate(), skill_validation="probably-fine")
+
+
+class SkillValidationSourceTests(unittest.TestCase):
+    """The gate must derive a Skill pass from evidence, never from its caller."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.addCleanup(self.temporary.cleanup)
+
+    def evaluate(self, *args, state: dict | None = None) -> dict:
+        environment = {
+            **os.environ,
+            "AGENT_GARDEN_PROMOTION_STATE": str(self.root / "candidates.json"),
+            "AGENT_GARDEN_FORWARD_TEST_DIR": str(self.root / "evidence"),
+        }
+        if state is not None:
+            (self.root / "candidates.json").write_text(json.dumps(state), encoding="utf-8")
+        completed = subprocess.run(
+            [sys.executable, str(MODULE_PATH), "evaluate", "sample", *args],
+            capture_output=True,
+            text=True,
+            env=environment,
+            check=True,
+        )
+        return json.loads(completed.stdout)
+
+    def two_successes(self) -> dict:
+        return {
+            "version": 2,
+            "candidates": {
+                "sample": {
+                    "observations": [
+                        {"trajectory": "viking://trace/one", "outcome": "success"},
+                        {"trajectory": "viking://trace/two", "outcome": "success"},
+                    ],
+                    "handled_success_count": 0,
+                    "last_route": None,
+                }
+            },
+        }
+
+    def test_cli_rejects_a_self_reported_pass(self):
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.evaluate("--skill-validation", "passed", state=self.two_successes())
+
+    def test_without_evidence_two_successes_stop_at_validated_experience(self):
+        result = self.evaluate(state=self.two_successes())
+        self.assertEqual(result["route"], "validated_experience")
+        self.assertEqual(result["skill_validation"], "not-run")
+        self.assertIn("no forward-test evidence", result["skill_validation_reason"])
 
 
 if __name__ == "__main__":

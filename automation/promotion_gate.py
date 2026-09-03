@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 from datetime import datetime, timezone
@@ -13,6 +14,38 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 STATE_PATH = Path(os.environ.get("AGENT_GARDEN_PROMOTION_STATE", PROJECT_ROOT / ".runtime/promotion-candidates.json"))
 STATE_VERSION = 2
 ROUTES = ("provisional_experience", "validated_experience", "promote_skill", "review")
+SKILL_VALIDATION_STATES = ("not-run", "passed", "failed")
+
+
+def forward_test_module():
+    """Load the forward-test harness by path.
+
+    Same lazy path-import install_runtime uses for its source patches: the
+    automation scripts are executed as files, not imported as a package, so a
+    plain sibling import does not resolve under the test runner.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "forward_test", PROJECT_ROOT / "automation/forward_test.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def skill_validation_for(candidate: str, skill_dir: str | None) -> dict:
+    """Derive a validation status from recorded forward-test evidence.
+
+    The gate deliberately does not accept "passed" from its caller. Promotion
+    to a Skill is the one route that changes what every worker executes, so it
+    must rest on a re-checkable artifact — an evidence file whose recorded
+    hash still matches the SKILL.md on disk — rather than on the judgment of
+    the same model that wrote the Skill.
+    """
+    try:
+        module = forward_test_module()
+    except Exception as error:  # pragma: no cover - only a broken checkout
+        return {"status": "not-run", "reason": f"forward-test harness unavailable: {error}"}
+    return module.verify(candidate, Path(skill_dir) if skill_dir else None)
 
 
 def successful_trajectories(candidate: dict) -> list[str]:
@@ -93,9 +126,18 @@ def resolve_candidate(candidate: dict, route: str, *, at: datetime | None = None
     return candidate
 
 
-def decision(candidate: dict, *, conflict: bool = False, risk: str = "normal", skill_validation: str = "not-run") -> dict:
+def decision(
+    candidate: dict,
+    *,
+    conflict: bool = False,
+    risk: str = "normal",
+    skill_validation: str = "not-run",
+    skill_validation_reason: str | None = None,
+) -> dict:
     successes = successful_trajectories(candidate)
     failures = sorted({item["trajectory"] for item in candidate.get("observations", []) if item.get("outcome") == "failure"})
+    if skill_validation not in SKILL_VALIDATION_STATES:
+        raise ValueError(f"Unsupported skill validation state: {skill_validation}")
     if conflict or risk == "mandatory-review":
         route = "review"
     elif len(successes) < 2:
@@ -110,6 +152,7 @@ def decision(candidate: dict, *, conflict: bool = False, risk: str = "normal", s
         "success_trajectories": successes,
         "failure_trajectories": failures,
         "skill_validation": skill_validation,
+        "skill_validation_reason": skill_validation_reason,
         "conflict": conflict,
         "risk": risk,
         "event": readiness(candidate),
@@ -127,7 +170,10 @@ def main() -> int:
     evaluate.add_argument("candidate")
     evaluate.add_argument("--conflict", action="store_true")
     evaluate.add_argument("--risk", choices=("normal", "mandatory-review"), default="normal")
-    evaluate.add_argument("--skill-validation", choices=("not-run", "passed", "failed"), default="not-run")
+    # There is deliberately no ``--skill-validation passed``. The only way to
+    # reach ``promote_skill`` is to point the gate at a Skill directory whose
+    # recorded forward test it can re-verify itself.
+    evaluate.add_argument("--skill", help="Candidate Skill directory to re-verify forward-test evidence against")
     sub.add_parser("ready")
     resolve = sub.add_parser("resolve")
     resolve.add_argument("candidate")
@@ -148,7 +194,14 @@ def main() -> int:
     elif args.command == "evaluate":
         candidate = state["candidates"].setdefault(args.candidate, new_candidate())
         normalize_candidate(candidate)
-        result = decision(candidate, conflict=args.conflict, risk=args.risk, skill_validation=args.skill_validation)
+        validation = skill_validation_for(args.candidate, args.skill)
+        result = decision(
+            candidate,
+            conflict=args.conflict,
+            risk=args.risk,
+            skill_validation=validation["status"],
+            skill_validation_reason=validation["reason"],
+        )
         output = {"candidate": args.candidate, **result}
     elif args.command == "ready":
         candidates = ready_candidates(state)

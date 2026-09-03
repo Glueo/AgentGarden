@@ -11,6 +11,7 @@ Agent Garden 是一套本机优先的人机协同知识库和个人经验自进�
 - 日常协调器使用 `anyrouter/gpt-5.6-sol`，失败后回退到 `micu-api/gpt-5.6-terra`。
 - Hermes 原生 `web_search` 使用免费 DDGS，原生 `web_extract` 使用 Tavily。
 - 冲突、证据不足或高风险候选保留在晋升门禁的 `review` 状态，并写入 Dream 审计；Garden 不再维护单独的 review 文件夹。
+- Skill 晋升要求两次独立成功轨迹加一次隔离前向测试。前向测试由 `automation/forward_test.py` 在一次性 Hermes home 中真实运行候选 Skill 两次（`gpt-5.6-sol`），门禁自行复核证据，不接受模型自述通过。
 
 ## 运行边界
 
