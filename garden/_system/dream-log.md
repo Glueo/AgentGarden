@@ -41,3 +41,12 @@ topics: [agent-garden, dream, audit]
 - 审查：无冲突或 mandatory-review 候选；未写入凭证、原始私密会话或其他秘密。
 - 验证：运行完整单元测试；运行 `automation/sync_garden.py --wait` 并复查 dry-run 为零变更。
 - Git commit：本条目所在的 Dream commit（`HEAD`）。
+
+## 2026-09-03 Dream
+
+- 输入会话：本轮消费 11 个已登记有效会话（2026-08-27 至 2026-09-02）；新扫描 6 个会话，其中 `20260902_204728_b1ec10`、`20260902_234905_3b77ae` 与 `cron_5514cfcf65fd_20260831_151159` 含工具调用、已验证产物或失败边界，判为有效；两个固定字符串探测及一个仅问候会话无可复用证据，判为无效。周期门因有效会话达到 11/10 而触发，事件门同时由 `hermes-system-update-maintenance` 触发。
+- OpenViking 快照（变更前）：`074995b821cbfe422c5b85a766803af9a8beab70`（已通过 snapshot show 回读核验）。
+- 候选路由：`hermes-system-update-maintenance` 有两次独立成功升级轨迹，门禁评估为 `validated_experience`；已有 OpenViking 经验 `Hermes系统更新操作` 覆盖该流程。反例是非 Git 安装不能套用同一更新路径，且更新未完成配置、Gateway 与 doctor 回读时不得宣称成功。`provider-model-availability-probing` 只有一次成功轨迹，保持 `provisional_experience`；其反例是 `/models` 中存在模型不等于实时可用，未禁用 fallback 的探测会产生假阳性。此前单次成功候选继续保持 provisional；`headless-dream-session-enumeration` 仍只有失败证据。
+- Skill：未创建或修改。更新流程与现有 Dreamer `hermes-agent` Skill 实质重叠，应优先合并而非新建近重复 Skill；本轮未执行可授权的隔离前向测试，因此门禁上限为 validated experience。模型可用性探测证据不足两条。无 Skill 路径、哈希、备份或验证项。
+- 知识与审查：新会话对应的事件与过程经验已由 OpenViking 提取存在，无需重复写 Wiki 或 memory。无冲突或 mandatory-review 候选；未记录凭证、端点秘密或原始私密会话。
+- 同步与验证：运行 `/opt/homebrew/Caskroom/miniconda/base/bin/conda run -n agent-garden python automation/sync_garden.py`，结果 `changed: 0`；同一环境运行 `python -m unittest discover -s tests -v`，37 项全部通过。Git commit 为本条目所在的 Dream commit（`HEAD`）。
