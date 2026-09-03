@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import importlib.util
 from datetime import datetime
 from pathlib import Path
 
@@ -17,23 +16,16 @@ PROJECT = Path(__file__).resolve().parents[1]
 HERMES_CONFIG = HOME / ".hermes/config.yaml"
 
 # ── AnyRouter routing ─────────────────────────────────────────────────
-# AnyRouter fronts both GPT and Claude, but Hermes resolves ``api_mode``
-# per provider entry, not per model (hermes_cli/runtime_provider.py), and
-# the two families need different wire formats: GPT answers on
-# /v1/responses (codex_responses) while Claude answers only on
-# /v1/messages (chat_completions 404s there). So the one upstream is
-# declared twice, same base URL and key, once per API surface.
+# AnyRouter serves GPT only. Its Claude models were dropped in 2026-09
+# after they proved unusable in practice, which also retired the
+# ``anthropic_messages`` twin entry and the source patch that taught Hermes
+# to send AnyRouter's ``context-1m-2025-08-07`` opt-in. Claude now reaches
+# the Garden only through providers that serve it natively.
 ANYROUTER_BASE_URL = "https://anyrouter.top/v1"
 ANYROUTER_GPT = "anyrouter"
-ANYROUTER_CLAUDE = "anyrouter-claude"
-# AnyRouter rejects every Claude request that does not opt into the 1M
-# window. Model entries must declare it, and the provider must carry the
-# ``context_1m_beta`` flag that patch_hermes_source.py teaches Hermes to
-# read (the beta header is otherwise Azure-only and unreachable from
-# config). Applied to the GPT entry too — the same account gate covers it.
+ANYROUTER_RETIRED = "anyrouter-claude"
 ANYROUTER_CONTEXT_LENGTH = 1_000_000
 ANYROUTER_GPT_MODELS = ("gpt-5.6-sol",)
-ANYROUTER_CLAUDE_MODELS = ("claude-fable-5-1", "claude-opus-5", "claude-opus-4-8")
 
 # ``-900k`` is a Hermes-side picker suffix, not a distinct upstream model:
 # it is stripped before the id hits the wire, and only opts the slug into
@@ -47,22 +39,9 @@ OPENAI_PROVIDER = "openai-codex"
 OPENAI_MODEL = "gpt-5.6-sol-900k"
 
 # One chain, used for the interactive coordinator and mirrored onto every
-# auxiliary task: AnyRouter SOL, then AnyRouter Claude, then the OpenAI
-# subscription, and only then the paid micu relay.
-#
-# ``api_mode`` is spelled out on every AnyRouter hop. A fallback entry
-# defaults to chat_completions and only auto-detects anthropic_messages for
-# hosts Hermes recognizes as Anthropic (chat_completion_helpers.py:2791) --
-# anyrouter.top is not one, so an unpinned Claude hop is sent over the
-# OpenAI wire and comes back 404 "当前 API 不支持所选模型". An explicit
-# api_mode on the entry always wins, which is what makes the split routable
-# from the chain and not just from the provider entry.
+# auxiliary task: AnyRouter SOL, then the OpenAI subscription, and only then
+# the paid micu relay.
 MAIN_FALLBACKS = [
-    {
-        "provider": ANYROUTER_CLAUDE,
-        "model": "claude-opus-5",
-        "api_mode": "anthropic_messages",
-    },
     {"provider": OPENAI_PROVIDER, "model": OPENAI_MODEL},
     {"provider": "micu-api", "model": "gpt-5.6-terra"},
 ]
@@ -151,60 +130,41 @@ def normalized_anyrouter_models(existing: dict, wanted: tuple[str, ...]) -> dict
     }
 
 
-def split_anyrouter_providers(config: dict) -> dict:
-    """Declare the AnyRouter upstream once per API surface, GPT and Claude.
+def normalize_anyrouter_provider(config: dict) -> dict:
+    """Keep exactly one AnyRouter entry, on the GPT surface.
 
-    Claude models are moved out of the codex_responses entry: left there they
-    are unreachable (that surface 404s them) and they would shadow the
-    anthropic_messages entry when a fallback names them.
+    Also drops the retired ``anyrouter-claude`` twin and the
+    ``context_1m_beta`` opt-in it needed. Both are removed on every run
+    rather than merely not created, so a config still carrying them from an
+    earlier install converges instead of keeping a provider whose requests
+    only ever fail.
     """
     providers = config.get("custom_providers") or []
     gpt_entry = None
-    claude_entry = None
     rest = []
     for item in providers:
         name = item.get("name")
         if name == ANYROUTER_GPT:
             gpt_entry = item
-        elif name == ANYROUTER_CLAUDE:
-            claude_entry = item
-        else:
+        elif name != ANYROUTER_RETIRED:
             rest.append(item)
     if gpt_entry is None:
         raise RuntimeError("Hermes provider not found: anyrouter")
 
-    inherited = {**(claude_entry or {})}
-    previous_models = {**(gpt_entry.get("models") or {}), **(inherited.get("models") or {})}
-    claude_models = {
+    models = {
         alias: value
-        for alias, value in previous_models.items()
-        if str(alias).startswith("claude-")
-    }
-    gpt_models = {
-        alias: value
-        for alias, value in previous_models.items()
+        for alias, value in (gpt_entry.get("models") or {}).items()
         if not str(alias).startswith("claude-")
     }
-
+    gpt_entry.pop("context_1m_beta", None)
     gpt_entry.update({
         "name": ANYROUTER_GPT,
         "base_url": ANYROUTER_BASE_URL,
         "api_mode": "codex_responses",
-        "models": normalized_anyrouter_models(gpt_models, ANYROUTER_GPT_MODELS),
+        "models": normalized_anyrouter_models(models, ANYROUTER_GPT_MODELS),
         "model": "gpt-5.6-sol",
-        "context_1m_beta": True,
     })
-    claude_entry = {
-        **inherited,
-        "name": ANYROUTER_CLAUDE,
-        "base_url": ANYROUTER_BASE_URL,
-        "api_key": gpt_entry.get("api_key"),
-        "api_mode": "anthropic_messages",
-        "models": normalized_anyrouter_models(claude_models, ANYROUTER_CLAUDE_MODELS),
-        "model": "claude-opus-5",
-        "context_1m_beta": True,
-    }
-    config["custom_providers"] = [*rest, gpt_entry, claude_entry]
+    config["custom_providers"] = [*rest, gpt_entry]
     return config
 
 
@@ -215,7 +175,7 @@ def patch_hermes_config(config: dict) -> dict:
         if item.get("name") != "huoshan"
     ]
 
-    split_anyrouter_providers(config)
+    normalize_anyrouter_provider(config)
 
     config["model"] = {
         **(config.get("model") or {}),
@@ -282,30 +242,22 @@ def patch_hermes_config(config: dict) -> dict:
 
 
 def patch_dreamer_profile_config(config: dict) -> dict:
-    """Point the dedicated Dream profile at Claude, GPT only as a backstop.
+    """Point the dedicated Dream profile at the same GPT chain as the rest.
 
-    Distillation is the one job in the Garden that is judged on writing
-    quality rather than throughput, so it leads with Fable and falls back
-    through Opus before giving up on Claude entirely.
+    It used to lead with Claude on the theory that distillation is judged on
+    writing quality rather than throughput. AnyRouter's Claude models never
+    worked reliably, so every Dream spent two failing hops before landing on
+    GPT anyway; the chain now states where the work actually runs. This
+    matches the model the Dream cron job already pins.
     """
-    split_anyrouter_providers(config)
+    normalize_anyrouter_provider(config)
     config["model"] = {
         **(config.get("model") or {}),
-        "default": "claude-fable-5-1",
-        "provider": ANYROUTER_CLAUDE,
-        "api_mode": "anthropic_messages",
+        "default": "gpt-5.6-sol",
+        "provider": ANYROUTER_GPT,
+        "api_mode": "codex_responses",
     }
     config["fallback_providers"] = [
-        {
-            "provider": ANYROUTER_CLAUDE,
-            "model": "claude-opus-5",
-            "api_mode": "anthropic_messages",
-        },
-        {
-            "provider": ANYROUTER_GPT,
-            "model": "gpt-5.6-sol",
-            "api_mode": "codex_responses",
-        },
         {"provider": "micu-api", "model": "gpt-5.6-sol"},
     ]
 
@@ -343,21 +295,6 @@ def remove_env_keys(path: Path, keys: set[str]) -> None:
     existing = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     kept = [line for line in existing if not any(line.startswith(f"{key}=") for key in keys)]
     write_private(path, "\n".join(kept) + "\n")
-
-
-def apply_source_patches() -> list[str]:
-    """Re-apply the Hermes source patches, loaded by path.
-
-    Imported lazily rather than at module scope because install_runtime is
-    itself loaded by path in the tests, where a sibling import would not
-    resolve.
-    """
-    spec = importlib.util.spec_from_file_location(
-        "patch_hermes_source", PROJECT / "automation/patch_hermes_source.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.main()
 
 
 def main() -> int:
@@ -415,8 +352,6 @@ def main() -> int:
         )
     patch_env(HERMES_ENV, {"OPENVIKING_ENDPOINT": "http://127.0.0.1:1933", "OPENVIKING_ACCOUNT": "default", "OPENVIKING_USER": "gwen", "OPENVIKING_AGENT": "hermes"})
     remove_env_keys(HERMES_ENV, {"TERMINAL_CWD", "MESSAGING_CWD"})
-    for name in apply_source_patches():
-        print(f"Re-applied Hermes source patch: {name}")
     print("Runtime configuration installed; secrets remained outside the project.")
     return 0
 

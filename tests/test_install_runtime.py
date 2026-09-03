@@ -30,30 +30,24 @@ class HermesConfigTests(unittest.TestCase):
 
         patched = install_runtime.patch_hermes_config(copy.deepcopy(config))
         gpt = install_runtime.provider(patched, "anyrouter")
-        claude = install_runtime.provider(patched, "anyrouter-claude")
 
         # Character-splayed keys are dropped and ``name`` is reset to the
         # wire id, not the display label the corrupted entry carried.
         self.assertEqual(gpt["models"]["gpt-5.6-sol"]["name"], "gpt-5.6-sol")
         self.assertNotIn("0", gpt["models"]["gpt-5.6-sol"])
-        self.assertEqual(claude["models"]["claude-opus-5"]["name"], "claude-opus-5")
-        self.assertNotIn("0", claude["models"]["claude-opus-5"])
 
-        # Claude moves off the codex_responses surface, which 404s it.
+        # AnyRouter serves GPT only; its Claude models and the retired twin
+        # entry are dropped rather than carried on a surface that 404s them.
         self.assertNotIn("claude-opus-5", gpt["models"])
         self.assertEqual(gpt["api_mode"], "codex_responses")
-        self.assertEqual(claude["api_mode"], "anthropic_messages")
-        self.assertEqual(claude["api_key"], "sk-test")
-        self.assertEqual(claude["base_url"], install_runtime.ANYROUTER_BASE_URL)
+        self.assertNotIn("context_1m_beta", gpt)
+        self.assertEqual(
+            [item["name"] for item in patched["custom_providers"] if item["name"].startswith("anyrouter")],
+            ["anyrouter"],
+        )
 
-        # Every AnyRouter model must declare the 1M window, and both entries
-        # carry the opt-in the source patch reads.
-        for entry in (gpt, claude):
-            self.assertTrue(entry["context_1m_beta"])
-            for alias, model in entry["models"].items():
-                self.assertEqual(model["context_length"], 1_000_000, alias)
-        for alias in install_runtime.ANYROUTER_CLAUDE_MODELS:
-            self.assertIn(alias, claude["models"])
+        for alias, model in gpt["models"].items():
+            self.assertEqual(model["context_length"], 1_000_000, alias)
 
         self.assertEqual(
             patched["model"],
@@ -66,11 +60,6 @@ class HermesConfigTests(unittest.TestCase):
         self.assertEqual(
             patched["fallback_providers"],
             [
-                {
-                    "provider": "anyrouter-claude",
-                    "model": "claude-opus-5",
-                    "api_mode": "anthropic_messages",
-                },
                 {"provider": "openai-codex", "model": "gpt-5.6-sol-900k"},
                 {"provider": "micu-api", "model": "gpt-5.6-terra"},
             ],
@@ -111,23 +100,52 @@ class HermesConfigTests(unittest.TestCase):
 
         self.assertEqual(
             patched["auxiliary"]["approval"]["fallback_chain"][0]["model"],
-            "claude-opus-5",
+            "gpt-5.6-sol-900k",
         )
 
-    def test_every_anyrouter_hop_pins_its_api_mode(self):
-        """AnyRouter hops must never inherit the chain's chat_completions default.
+    def test_retired_anyrouter_claude_entry_is_removed(self):
+        """A config still carrying the retired twin must converge, not keep it.
 
-        A fallback entry defaults to chat_completions and only auto-detects
-        anthropic_messages for hosts Hermes knows are Anthropic; anyrouter.top
-        is not one. An unpinned Claude hop is therefore sent over the OpenAI
-        wire and burns its retries on 404 "当前 API 不支持所选模型" before the
-        chain advances -- which reads as the Claude tier being skipped.
+        AnyRouter's Claude models never worked in practice and the source
+        patch that fed them the 1M opt-in is gone, so an inherited
+        ``anyrouter-claude`` entry can only produce failing hops.
         """
-        expected = {
-            "anyrouter": "codex_responses",
-            "anyrouter-claude": "anthropic_messages",
+        config = {
+            "custom_providers": [
+                {
+                    "name": "anyrouter",
+                    "api_key": "sk-test",
+                    "context_1m_beta": True,
+                    "models": {"gpt-5.6-sol": {}, "claude-opus-5": {}},
+                },
+                {
+                    "name": "anyrouter-claude",
+                    "api_key": "sk-test",
+                    "context_1m_beta": True,
+                    "models": {"claude-opus-5": {}},
+                },
+            ]
         }
-        chains = [
+
+        patched = install_runtime.patch_hermes_config(config)
+
+        names = [item["name"] for item in patched["custom_providers"]]
+        self.assertNotIn("anyrouter-claude", names)
+        gpt = install_runtime.provider(patched, "anyrouter")
+        self.assertNotIn("context_1m_beta", gpt)
+        self.assertEqual(list(gpt["models"]), ["gpt-5.6-sol"])
+
+    def test_every_anyrouter_reference_pins_its_api_mode(self):
+        """AnyRouter is never left to Hermes' chat_completions default.
+
+        A model or fallback entry defaults to chat_completions unless it pins
+        a mode, and anyrouter.top is not a host Hermes auto-detects. An
+        unpinned reference is sent over the wrong wire and burns its retries
+        on 404 before anything advances. Covers the primary model block, the
+        provider entry, and every chain hop, so adding an AnyRouter fallback
+        later cannot reintroduce the bug.
+        """
+        configs = [
             install_runtime.patch_hermes_config(
                 {"custom_providers": [{"name": "anyrouter", "models": {}}]}
             ),
@@ -137,22 +155,25 @@ class HermesConfigTests(unittest.TestCase):
         ]
 
         checked = 0
-        for config in chains:
-            chain = config["fallback_providers"] + [
-                entry
-                for task in install_runtime.AUXILIARY_TASKS
-                for entry in (config.get("auxiliary") or {})
-                .get(task, {})
-                .get("fallback_chain", [])
+        for config in configs:
+            references = [
+                config["model"],
+                install_runtime.provider(config, "anyrouter"),
+                *config["fallback_providers"],
+                *[
+                    entry
+                    for task in install_runtime.AUXILIARY_TASKS
+                    for entry in (config.get("auxiliary") or {})
+                    .get(task, {})
+                    .get("fallback_chain", [])
+                ],
             ]
-            for entry in chain:
-                if entry["provider"] not in expected:
+            for entry in references:
+                if entry.get("provider", entry.get("name")) != "anyrouter":
                     continue
-                self.assertEqual(
-                    entry.get("api_mode"), expected[entry["provider"]], entry
-                )
+                self.assertEqual(entry.get("api_mode"), "codex_responses", entry)
                 checked += 1
-        self.assertTrue(checked, "no AnyRouter hops were checked")
+        self.assertTrue(checked, "no AnyRouter references were checked")
 
     def test_patch_rejects_malformed_unrepaired_models(self):
         config = {
@@ -164,7 +185,7 @@ class HermesConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "broken model bad"):
             install_runtime.patch_hermes_config(config)
 
-    def test_patch_dreamer_profile_leads_with_claude(self):
+    def test_patch_dreamer_profile_uses_the_gpt_chain(self):
         patched = install_runtime.patch_dreamer_profile_config(
             {"custom_providers": [{"name": "anyrouter", "models": {}}]}
         )
@@ -172,26 +193,14 @@ class HermesConfigTests(unittest.TestCase):
         self.assertEqual(
             patched["model"],
             {
-                "default": "claude-fable-5-1",
-                "provider": "anyrouter-claude",
-                "api_mode": "anthropic_messages",
+                "default": "gpt-5.6-sol",
+                "provider": "anyrouter",
+                "api_mode": "codex_responses",
             },
         )
         self.assertEqual(
             patched["fallback_providers"],
-            [
-                {
-                    "provider": "anyrouter-claude",
-                    "model": "claude-opus-5",
-                    "api_mode": "anthropic_messages",
-                },
-                {
-                    "provider": "anyrouter",
-                    "model": "gpt-5.6-sol",
-                    "api_mode": "codex_responses",
-                },
-                {"provider": "micu-api", "model": "gpt-5.6-sol"},
-            ],
+            [{"provider": "micu-api", "model": "gpt-5.6-sol"}],
         )
         self.assertEqual(patched["agent"]["api_max_retries"], 3)
         self.assertEqual(patched["skills"]["external_dirs"], [])
