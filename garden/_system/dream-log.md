@@ -50,3 +50,13 @@ topics: [agent-garden, dream, audit]
 - Skill：未创建或修改。更新流程与现有 Dreamer `hermes-agent` Skill 实质重叠，应优先合并而非新建近重复 Skill；本轮未执行可授权的隔离前向测试，因此门禁上限为 validated experience。模型可用性探测证据不足两条。无 Skill 路径、哈希、备份或验证项。
 - 知识与审查：新会话对应的事件与过程经验已由 OpenViking 提取存在，无需重复写 Wiki 或 memory。无冲突或 mandatory-review 候选；未记录凭证、端点秘密或原始私密会话。
 - 同步与验证：运行 `/opt/homebrew/Caskroom/miniconda/base/bin/conda run -n agent-garden python automation/sync_garden.py`，结果 `changed: 0`；同一环境运行 `python -m unittest discover -s tests -v`，37 项全部通过。Git commit 为本条目所在的 Dream commit（`HEAD`）。
+
+## 2026-09-04 Dream
+
+- 输入会话：新扫描 13 个已提交 OpenViking 会话；`20260903_170621_d27b19`、`20260903_204251_2f7f94`、`20260904_003126_27b873`、`cron_5514cfcf65fd_20260903_164011` 与 4 个 `hermes-remember-*` 会话含工具产物、失败复盘或显式知识，判为有效；5 个固定字符串路由探测判为无效。4 个 remember 会话是原始会话的派生记忆提交，不计作独立成功轨迹。周期门为 8/10、`due: false`；事件门由 `hermes-model-channel-fallback-configuration` 的第二条独立成功轨迹触发。
+- OpenViking 快照（变更前）：`56d74b83d9e287d2828659f5e5631d40e908a207`（已通过 snapshot show 回读核验）。
+- 候选路由：`hermes-model-channel-fallback-configuration` 的来源为 `viking://user/gwen/sessions/20260827_182852_578a6f/history/archive_001` 与 `viking://user/gwen/sessions/20260903_170621_d27b19/history/archive_002`，两次独立成功，门禁上限为 `validated_experience`；已有 `viking://user/gwen/memories/experiences/hermes_fallback_provider_chain_configure.md` 覆盖流程。反例是未经用户确认顺序、未验证 provider 鉴权与最小请求、未回读配置并重启 Gateway 时不得套用或宣称成功。`hermes-source-zero-modification-recovery`、`fallback-context-compression-diagnosis`、`distill-experience-workflow-run` 各只有一次独立成功，保持 `provisional_experience`；前者不得对非 Git 安装或未确认归属的本地修改执行破坏性还原，后两者分别不得把单一版本阈值缺口泛化到所有模型、不得把同一 Dream 的派生产物当作独立证据。
+- OpenViking 经验：对 `fallback-context-compression-diagnosis` 提交并完成提取，生成 `viking://user/gwen/memories/experiences/fallback_context_compression_diagnosis.md`；其来源为 `viking://user/gwen/sessions/20260904_003126_27b873/history/archive_001`。核心边界是主模型恢复不等于被 fallback 压缩的历史可恢复，且 75%/85% 阈值结论必须按当前版本、模型元数据与日志重新核验。其他新会话的事件、偏好与过程记录已由 OpenViking 提取，未重复写 Garden Wiki。
+- 人工审查：`openai-codex-900k-selector-removal` 仅有 `viking://user/gwen/sessions/20260903_204251_2f7f94/history/archive_002` 一次成功，且涉及 Hermes 核心源码、多条模型目录/缓存/传输路径，两个独立审查尝试均中断；门禁按不明确爆炸半径保留 `review`。反例是旧缓存或 current-model 回注仍可复活退役别名，标准 Codex 模型回归或后续 upstream update 覆盖本地补丁时均不能视为完成。已有经验 `viking://user/gwen/memories/experiences/模型选择器合成模型移除排查.md`，本轮不自动改 Skill 或源码。
+- Skill：未创建或修改。模型 provider、fallback 与配置管理行为实质重叠于 Dreamer `hermes-agent` Skill 的 `references/providers-and-models.md`；候选无隔离前向测试证据，因此不得超过 validated experience。源码移除候选仍在 review。无 Skill 路径、哈希、备份或验证证据。
+- 同步与验证：`conda run -n agent-garden python automation/sync_garden.py --wait` 与后续 dry-run 均为 `changed: 0`；`conda run -n agent-garden python -m unittest discover -s tests -v` 共 56 项全部通过。Git commit 为本条目所在的 Dream commit（`HEAD`）。
