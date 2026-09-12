@@ -70,3 +70,13 @@ topics: [agent-garden, dream, audit]
 - Skill：未创建或修改。fallback 配置与模型探测实质重叠于 Dreamer `hermes-agent`，Dream 执行流程已由 `distill-experience` 覆盖，计划适配属于用户特定知识而非执行 Skill；算法语言候选只有一条证据。所有候选均无隔离前向测试证据，门禁上限不超过 validated experience；无 Skill 路径、哈希或备份项。
 - 审查：既有 `openai-codex-900k-selector-removal` 继续保留 `review`，本轮未自动改动 Hermes 核心源码或安全敏感配置；无新增 mandatory-review 候选，未写入凭证、余额或私密日志。
 - 同步与验证：Garden 同步提交已完成；使用 `/opt/homebrew/Caskroom/miniconda/base/envs/agent-garden/bin/python automation/sync_garden.py` 回读为 `changed: 0`，并用同一解释器运行 `-m unittest discover -s tests -v`，共 56 项全部通过。Git commit 为本条目所在的 Dream commit（`HEAD`）。
+
+## 2026-09-13 Dream
+
+- 输入会话：新扫描 5 个已提交 OpenViking 会话，均含工具调用、用户纠正、配置产物或显式知识，判为有效：`20260912_140919_47ebb4`、`20260912_145038_7077d4`、`20260912_164745_564e44`、`20260912_190636_040fee`、`20260913_010145_533c80`。偏好写入生成的 `hermes-remember-c7ee2f2c3e0d` 作为派生会话一并记录为有效，但不计作独立成功轨迹。周期门为 5/10 且未到 7 天；4 个候选各新增一条独立成功轨迹，事件门触发完整 Dream。
+- OpenViking 快照（变更前）：`a2d18282b1d0d1f6413cdae8eca6aa5e70eeb960`，已通过 snapshot log 回读核验。
+- 用户偏好：将“说明性文字按根因与正确逻辑直接覆盖，采用肯定、清晰、自然的表达，避免补丁式改写、双重否定和过度防御性陈述”提交至 OpenViking，来源为 `viking://user/gwen/sessions/20260912_190636_040fee/history/archive_002`；提交会话为 `viking://user/gwen/sessions/hermes-remember-c7ee2f2c3e0d/history/archive_001/messages.jsonl`，已回读核验。边界是事实准确性、风险披露与必要适用条件仍需完整保留。
+- 候选路由：`distill-experience-workflow-run`、`hermes-system-update-maintenance`、`provider-model-availability-probing`、`hermes-model-channel-fallback-configuration` 均各新增一条独立成功轨迹，门禁评估为 `validated_experience`；`affirmative-root-cause-writing` 只有一条直接用户偏好证据，门禁为 `provisional_experience`，实际按个人偏好写入 OpenViking。Dream 流程的失败证据为 `viking://user/gwen/sessions/20260912_140919_47ebb4/history/archive_002`：未完成 Git、状态与事件收尾的中间运行不能宣称完整完成。系统升级的反例是非 Git 安装或存在未处理本地补丁时不能套用同一更新路径；模型探测的反例是 `/models` 目录存在不等于真实推理可用；fallback 配置的反例是当前公开配置只提供全局 `api_max_retries`，不能表达 Astra 与 Sol 不同的重试间隔，配置校验也不能替代无 fallback 的真实调用。
+- Skill：未创建或修改。Dream 执行已由 `distill-experience` 覆盖；Hermes 更新、模型探测与 fallback 配置与现有 `hermes-agent`、`hermes-model-orchestration` 行为重叠；写作偏好属于用户画像。所有候选均无可复核的隔离前向测试证据，门禁上限不超过 `validated_experience`；无 Skill 路径、哈希、备份或验证证据。
+- 审查：既有 `openai-codex-900k-selector-removal` 保持 `review`；本轮未新增 mandatory-review 候选，未自动改动 Hermes 源码、凭证、安全策略或外部通信配置。`20260913_010145_533c80` 的 AnyRouter Sol 排查尚未形成可复用结果，因此只记录会话，不创建成功候选。
+- 同步与验证：使用 `/opt/homebrew/Caskroom/miniconda/base/envs/agent-garden/bin/python automation/sync_garden.py --wait`，结果为 `changed: 0`；同一解释器运行 `-m unittest discover -s tests -v`，共 57 项全部通过。仓库原有 `README.md`、`automation/install_runtime.py`、`tests/test_install_runtime.py` 修改未纳入本次 Dream 提交。Git commit 为本条目所在的 Dream commit（`HEAD`）。
