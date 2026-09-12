@@ -60,3 +60,13 @@ topics: [agent-garden, dream, audit]
 - 人工审查：`openai-codex-900k-selector-removal` 仅有 `viking://user/gwen/sessions/20260903_204251_2f7f94/history/archive_002` 一次成功，且涉及 Hermes 核心源码、多条模型目录/缓存/传输路径，两个独立审查尝试均中断；门禁按不明确爆炸半径保留 `review`。反例是旧缓存或 current-model 回注仍可复活退役别名，标准 Codex 模型回归或后续 upstream update 覆盖本地补丁时均不能视为完成。已有经验 `viking://user/gwen/memories/experiences/模型选择器合成模型移除排查.md`，本轮不自动改 Skill 或源码。
 - Skill：未创建或修改。模型 provider、fallback 与配置管理行为实质重叠于 Dreamer `hermes-agent` Skill 的 `references/providers-and-models.md`；候选无隔离前向测试证据，因此不得超过 validated experience。源码移除候选仍在 review。无 Skill 路径、哈希、备份或验证证据。
 - 同步与验证：`conda run -n agent-garden python automation/sync_garden.py --wait` 与后续 dry-run 均为 `changed: 0`；`conda run -n agent-garden python -m unittest discover -s tests -v` 共 56 项全部通过。Git commit 为本条目所在的 Dream commit（`HEAD`）。
+
+## 2026-09-12 Dream
+
+- 输入会话：新扫描 6 个已提交 OpenViking 会话；`20260904_161653_b26138`、`20260904_162132_9b2ecb`、`cron_5514cfcf65fd_20260904_143840` 与 `hermes-remember-ab0165ef660b` 含工具产物、显式决策或完整复盘，判为有效；两个固定字符串连通性探测判为无效。`hermes-remember-ab0165ef660b` 是既有经验的派生提交，不计作独立成功轨迹。周期门因距上次完整 Dream 满 7 天触发；扫描后事件门也由 4 个候选触发。
+- OpenViking 快照（变更前）：`4b55e83b44e93f3f22e44dd49bf00b4b77a63a33`（已通过 snapshot log 回读核验）。
+- 稳定知识：将用户已确认的算法、项目和面试统一主语言 Python 3 写入 `garden/wiki/算法复习.md` 与 `garden/wiki/2026-2027 Agent实习准备计划.md`，并补充来源 `viking://user/gwen/sessions/20260904_161653_b26138/history/archive_001`。代码随想录二刷不推翻，新增题目改用 Python；既有 C++ 专题只迁移代表题，C++ 保留为阅读能力，除非未来目标转向 AI Infra、推理引擎等底层岗位或 JD 明确要求。反例边界是不能把当前 Agent/大模型应用岗位的语言选择泛化到所有算法、系统或嵌入式岗位。
+- 候选路由：`internship-plan-adaptability-evaluation`、`provider-model-availability-probing` 与 `distill-experience-workflow-run` 均达到两条独立成功轨迹，门禁评估为 `validated_experience`；`hermes-model-channel-fallback-configuration` 增至三条独立成功轨迹，仍为 `validated_experience`。`algorithm-interview-language-alignment` 只有一次成功，保持 `provisional_experience`。模型探测反例是目录存在或启用 fallback 的成功响应不能证明指定 provider 可用；计划适配反例是不能忽略目标岗位、课业负载与已确认边界套用固定路线；Dream 流程的派生 memory 不能作为独立证据。
+- Skill：未创建或修改。fallback 配置与模型探测实质重叠于 Dreamer `hermes-agent`，Dream 执行流程已由 `distill-experience` 覆盖，计划适配属于用户特定知识而非执行 Skill；算法语言候选只有一条证据。所有候选均无隔离前向测试证据，门禁上限不超过 validated experience；无 Skill 路径、哈希或备份项。
+- 审查：既有 `openai-codex-900k-selector-removal` 继续保留 `review`，本轮未自动改动 Hermes 核心源码或安全敏感配置；无新增 mandatory-review 候选，未写入凭证、余额或私密日志。
+- 同步与验证：Garden 同步提交已完成；使用 `/opt/homebrew/Caskroom/miniconda/base/envs/agent-garden/bin/python automation/sync_garden.py` 回读为 `changed: 0`，并用同一解释器运行 `-m unittest discover -s tests -v`，共 56 项全部通过。Git commit 为本条目所在的 Dream commit（`HEAD`）。
