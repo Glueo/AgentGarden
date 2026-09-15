@@ -4,15 +4,15 @@ kind: hub
 status: stable
 source_uris: []
 created: 2026-08-07
-updated: 2026-08-07
+updated: 2026-09-14
 topics: [agent-garden, system]
 ---
 
 # Agent Garden
 
 - [[purpose|目的与边界]]
-- [[policy|自治与晋升政策]]
+- [[policy|自治与写入政策]]
 - [[schema|笔记 Schema 与分类生长规则]]
-- [[dream-log|Dream 审计日志]]
+- [[dream-log|已退役 Dream 历史审计]]
 
-主题 Hub 只在内容形成稳定簇后生成。Garden 只保存 `wiki/`、`sources/` 与系统审计；可执行 Skill 由 Hermes Dreamer profile 管理。
+主题 Hub 只在内容形成稳定簇后生成。Garden 保存 `wiki/`、`sources/` 与系统记录；可执行 Skill 由 Hermes 原生目录 `~/.hermes/skills/` 管理。

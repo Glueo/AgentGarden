@@ -25,32 +25,40 @@ ANYROUTER_BASE_URL = "https://anyrouter.top/v1"
 ANYROUTER_GPT = "anyrouter"
 ANYROUTER_RETIRED = "anyrouter-claude"
 ANYROUTER_CONTEXT_LENGTH = 1_000_000
-ANYROUTER_GPT_MODELS = ("gpt-5.6-sol",)
+ANYROUTER_PRIMARY_MODEL = "gpt-6-astra"
+ANYROUTER_SOL_MODEL = "gpt-5.6-sol"
+ANYROUTER_GPT_MODELS = (ANYROUTER_PRIMARY_MODEL, ANYROUTER_SOL_MODEL)
 
-# ``-900k`` is a Hermes-side picker suffix, not a distinct upstream model:
-# it is stripped before the id hits the wire, and only opts the slug into
-# the large window. Codex subscriptions advertise a stale 272K while the
-# real ceiling was measured at ~911K input tokens (1.05M minus output
-# headroom); Hermes exposes 900K to keep margin. See
-# agent/model_metadata.py::_CODEX_OAUTH_VERIFIED_ABOVE_ADVERTISED_PREFIXES.
-# So this IS the single unified OpenAI model — the bare slug would silently
-# cap the same model at 272K.
+# Use the standard OpenAI Codex route. The prior Hermes-only ``-900k``
+# selector variant has been retired along with the profile that defined it.
+# Keeping the bare model id here makes a future runtime install converge on
+# the supported 272K Codex context instead of resurrecting that local alias.
 OPENAI_PROVIDER = "openai-codex"
-OPENAI_MODEL = "gpt-5.6-sol-900k"
+OPENAI_MODEL = "gpt-5.6-sol"
 
-# One chain, used for the interactive coordinator and mirrored onto every
-# auxiliary task: AnyRouter SOL, then the OpenAI subscription, and only then
-# the paid micu relay.
+# The interactive coordinator alone may reach Micu: AnyRouter Astra retries
+# first as the primary, then fallback walks AnyRouter SOL, the OpenAI
+# subscription, and finally the limited paid Micu SOL route.
 MAIN_FALLBACKS = [
+    {
+        "provider": ANYROUTER_GPT,
+        "model": ANYROUTER_SOL_MODEL,
+        "api_mode": "codex_responses",
+    },
     {"provider": OPENAI_PROVIDER, "model": OPENAI_MODEL},
-    {"provider": "micu-api", "model": "gpt-5.6-terra"},
+    {"provider": "micu-api", "model": "gpt-5.6-sol"},
+]
+AUXILIARY_FALLBACKS = [
+    {"provider": OPENAI_PROVIDER, "model": OPENAI_MODEL},
 ]
 
-AUXILIARY_TASKS = ("title_generation", "approval", "compression", "memory_query_rewrite")
+AUXILIARY_TASKS = (
+    "title_generation", "approval", "compression", "memory_query_rewrite", "goal_judge",
+)
 
 HERMES_ENV = HOME / ".hermes/.env"
-DREAMER_PROFILE_CONFIG = HOME / ".hermes/profiles/dreamer/config.yaml"
-DREAMER_SKILLS = HOME / ".hermes/profiles/dreamer/skills"
+HERMES_SKILLS = HOME / ".hermes/skills"
+HERMES_PROFILES = HOME / ".hermes/profiles"
 OV_DIR = HOME / ".openviking"
 OV_CONFIG = OV_DIR / "ov.conf"
 OVCLI_CONFIG = OV_DIR / "ovcli.conf"
@@ -79,29 +87,74 @@ def first_provider(config: dict, *names: str) -> dict:
     raise RuntimeError(f"Hermes provider not found: {', '.join(names)}")
 
 
-def patch_skill_ownership(config: dict, *, dreamer_owner: bool) -> dict:
-    """Keep Dreamer as the only mutable source for distilled skills."""
+def patch_skill_config(config: dict, *, shared_root: bool) -> dict:
+    """Use Hermes' native skill root and disable autonomous maintenance."""
     skills = {**(config.get("skills") or {})}
     raw_external = skills.get("external_dirs") or []
     if isinstance(raw_external, str):
         raw_external = [raw_external]
     garden_skills = str(PROJECT / "garden/skills")
-    dreamer_skills = str(DREAMER_SKILLS)
-    external = [
-        str(item) for item in raw_external
-        if str(item) not in {garden_skills, dreamer_skills}
-    ]
-    if not dreamer_owner:
-        external.append(dreamer_skills)
+
+    def is_profile_skill_dir(value: str) -> bool:
+        try:
+            relative = Path(value).expanduser().relative_to(HERMES_PROFILES)
+        except ValueError:
+            return False
+        return len(relative.parts) == 2 and relative.parts[1] == "skills"
+
+    external = []
+    for item in raw_external:
+        value = str(item)
+        if value == garden_skills or is_profile_skill_dir(value):
+            continue
+        external.append(value)
+    if shared_root:
+        external.append(str(HERMES_SKILLS))
     skills.update({
         "external_dirs": list(dict.fromkeys(external)),
-        # Per-chat nudges stay off. The scheduled Dream is the sole writer.
         "creation_nudge_interval": 0,
-        # Dreamer can maintain its local skills unattended; consumers cannot
-        # mutate those external skills through autonomous curation.
-        "write_approval": not dreamer_owner,
+        "write_approval": True,
+        "ledger": True,
     })
     config["skills"] = skills
+    config["curator"] = {
+        **(config.get("curator") or {}),
+        "enabled": False,
+    }
+    auxiliary = {**(config.get("auxiliary") or {})}
+    auxiliary["background_review"] = {
+        **(auxiliary.get("background_review") or {}),
+        "enabled": False,
+    }
+    config["auxiliary"] = auxiliary
+    return config
+
+
+def remove_micu_non_main_routes(config: dict) -> dict:
+    """Reserve every Micu route for the default profile's final fallback."""
+    direct_routes = [
+        ("model", config.get("model")),
+        ("delegation", config.get("delegation")),
+        *[
+            (f"auxiliary.{name}", route)
+            for name, route in (config.get("auxiliary") or {}).items()
+        ],
+    ]
+    for name, route in direct_routes:
+        if isinstance(route, dict) and route.get("provider") == "micu-api":
+            raise RuntimeError(f"Micu direct route is forbidden outside the default profile: {name}")
+
+    def without_micu(entries: list[dict] | None) -> list[dict]:
+        return [entry for entry in (entries or []) if entry.get("provider") != "micu-api"]
+
+    config["fallback_providers"] = without_micu(config.get("fallback_providers"))
+    for task in (config.get("auxiliary") or {}).values():
+        if not isinstance(task, dict) or "fallback_chain" not in task:
+            continue
+        task["fallback_chain"] = without_micu(task.get("fallback_chain"))
+    delegation = config.get("delegation") or {}
+    if isinstance(delegation, dict) and "fallback_providers" in delegation:
+        delegation["fallback_providers"] = without_micu(delegation.get("fallback_providers"))
     return config
 
 
@@ -130,7 +183,7 @@ def normalized_anyrouter_models(existing: dict, wanted: tuple[str, ...]) -> dict
     }
 
 
-def normalize_anyrouter_provider(config: dict) -> dict:
+def normalize_anyrouter_provider(config: dict, *, selected_model: str) -> dict:
     """Keep exactly one AnyRouter entry, on the GPT surface.
 
     Also drops the retired ``anyrouter-claude`` twin and the
@@ -161,8 +214,13 @@ def normalize_anyrouter_provider(config: dict) -> dict:
         "name": ANYROUTER_GPT,
         "base_url": ANYROUTER_BASE_URL,
         "api_mode": "codex_responses",
+        # AnyRouter requires this marker even when stale reasoning replay is disabled.
+        "extra_body": {
+            **(gpt_entry.get("extra_body") or {}),
+            "include": ["reasoning.encrypted_content"],
+        },
         "models": normalized_anyrouter_models(models, ANYROUTER_GPT_MODELS),
-        "model": "gpt-5.6-sol",
+        "model": selected_model,
     })
     config["custom_providers"] = [*rest, gpt_entry]
     return config
@@ -175,22 +233,30 @@ def patch_hermes_config(config: dict) -> dict:
         if item.get("name") != "huoshan"
     ]
 
-    normalize_anyrouter_provider(config)
+    normalize_anyrouter_provider(config, selected_model=ANYROUTER_PRIMARY_MODEL)
 
     config["model"] = {
         **(config.get("model") or {}),
-        "default": "gpt-5.6-sol",
+        "default": ANYROUTER_PRIMARY_MODEL,
         "provider": ANYROUTER_GPT,
         "api_mode": "codex_responses",
     }
     config["fallback_providers"] = [dict(entry) for entry in MAIN_FALLBACKS]
+    config["delegation"] = {
+        **(config.get("delegation") or {}),
+        "provider": ANYROUTER_GPT,
+        "model": ANYROUTER_SOL_MODEL,
+        "api_mode": "codex_responses",
+        # Child routing is independent of the main session's paid fallback.
+        "fallback_providers": [],
+    }
 
 
     config["terminal"] = {
         **(config.get("terminal") or {}),
         "cwd": str(PROJECT),
     }
-    patch_skill_ownership(config, dreamer_owner=False)
+    patch_skill_config(config, shared_root=False)
     config["memory"] = {
         **(config.get("memory") or {}),
         "provider": "openviking",
@@ -203,14 +269,15 @@ def patch_hermes_config(config: dict) -> dict:
     }
     config["agent"] = {
         **(config.get("agent") or {}),
-        # Retry each provider up to three times after its initial API attempt.
-        "api_max_retries": 3,
+        # Give every provider hop five API attempts before fallback.
+        "api_max_retries": 5,
     }
     config["sessions"] = {
         **(config.get("sessions") or {}),
         # Soft-hide inactive history; never delete sessions automatically.
         "auto_archive": True,
         "auto_archive_days": 7,
+        "auto_prune": False,
     }
     auxiliary = {
         **(config.get("auxiliary") or {}),
@@ -220,12 +287,17 @@ def patch_hermes_config(config: dict) -> dict:
     for task in AUXILIARY_TASKS:
         auxiliary[task] = {
             **(auxiliary.get(task) or {}),
-            "provider": "auto",
-            # Same order as the main chain, so a provider outage moves the
-            # small calls (titles, approvals, compression) exactly where it
-            # moves the conversation.
-            "fallback_chain": [dict(entry) for entry in MAIN_FALLBACKS],
+            "provider": ANYROUTER_GPT,
+            "model": ANYROUTER_SOL_MODEL,
+            # Micu SOL is reserved for the interactive coordinator's final
+            # fallback. Auxiliary work starts on AnyRouter and may use the
+            # OpenAI subscription, but never consumes the limited Micu route.
+            "fallback_chain": [dict(entry) for entry in AUXILIARY_FALLBACKS],
         }
+    auxiliary["background_review"] = {
+        **(auxiliary.get("background_review") or {}),
+        "enabled": False,
+    }
     config["auxiliary"] = auxiliary
 
 
@@ -241,39 +313,6 @@ def patch_hermes_config(config: dict) -> dict:
     return config
 
 
-def patch_dreamer_profile_config(config: dict) -> dict:
-    """Point the dedicated Dream profile at the same GPT chain as the rest.
-
-    It used to lead with Claude on the theory that distillation is judged on
-    writing quality rather than throughput. AnyRouter's Claude models never
-    worked reliably, so every Dream spent two failing hops before landing on
-    GPT anyway; the chain now states where the work actually runs. This
-    matches the model the Dream cron job already pins.
-    """
-    normalize_anyrouter_provider(config)
-    config["model"] = {
-        **(config.get("model") or {}),
-        "default": "gpt-5.6-sol",
-        "provider": ANYROUTER_GPT,
-        "api_mode": "codex_responses",
-    }
-    config["fallback_providers"] = [
-        {"provider": "micu-api", "model": "gpt-5.6-sol"},
-    ]
-
-    config["agent"] = {
-        **(config.get("agent") or {}),
-        "api_max_retries": 3,
-    }
-    config["web"] = {
-        **(config.get("web") or {}),
-        "search_backend": "ddgs",
-        "extract_backend": "tavily",
-    }
-    patch_skill_ownership(config, dreamer_owner=True)
-    return config
-
-
 def write_private(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -281,6 +320,53 @@ def write_private(path: Path, content: str) -> None:
     os.chmod(temporary, 0o600)
     os.replace(temporary, path)
     os.chmod(path, 0o600)
+
+
+def patch_openviking_config(existing: dict, *, vlm_key: str, embedding_key: str) -> dict:
+    """Pin OpenViking to the single approved Doubao VLM route."""
+    config = existing
+    config.setdefault("default_account", "default")
+    config.setdefault("default_user", "gwen")
+    server = config.setdefault("server", {})
+    server.update({"host": "127.0.0.1", "port": 1933, "auth_mode": "dev", "cors_origins": ["http://127.0.0.1:1933"]})
+    storage = config.setdefault("storage", {})
+    storage.setdefault("workspace", str(OV_DATA))
+    storage.setdefault("agfs", {"backend": "local"})
+    storage.setdefault("vectordb", {"backend": "local", "dimension": 1024})
+    embedding = config.setdefault("embedding", {})
+    embedding.setdefault("dense", {
+        "provider": "volcengine",
+        "api_key": embedding_key,
+        "api_base": "https://ark.cn-beijing.volces.com/api/v3",
+        "model": "doubao-embedding-vision-251215",
+        "dimension": 1024,
+        "input": "multimodal",
+        "batch_size": 8,
+    })
+    config["vlm"] = {
+        "provider": "volcengine",
+        "api_key": vlm_key,
+        "api_base": "https://ark.cn-beijing.volces.com/api/v3",
+        "model": "doubao-seed-2-0-lite-260215",
+        "temperature": 0.0,
+        "max_retries": 1,
+        "max_concurrent": 4,
+        "timeout": 180.0,
+    }
+    memory = config.setdefault("memory", {})
+    memory["custom_templates_dir"] = str(PROJECT / "openviking/memory-templates")
+    config.setdefault("rerank", {})
+    config.setdefault("output_language_override", "")
+    return config
+
+
+def approved_vlm_key(existing: dict) -> str | None:
+    vlm = existing.get("vlm") or {}
+    api_base = str(vlm.get("api_base") or "")
+    if vlm.get("provider") != "volcengine" or api_base != "https://ark.cn-beijing.volces.com/api/v3":
+        return None
+    value = vlm.get("api_key")
+    return value if isinstance(value, str) and value else None
 
 
 def patch_env(path: Path, values: dict[str, str]) -> None:
@@ -299,25 +385,16 @@ def remove_env_keys(path: Path, keys: set[str]) -> None:
 
 def main() -> int:
     config = yaml.safe_load(HERMES_CONFIG.read_text(encoding="utf-8"))
-    camel = first_provider(config, "camel-openviking", "camel")
+    existing_ov = json.loads(OV_CONFIG.read_text(encoding="utf-8")) if OV_CONFIG.exists() else {}
+    vlm_key = approved_vlm_key(existing_ov)
     try:
         huoshan_key = provider(config, "huoshan").get("api_key")
     except RuntimeError:
-        existing_ov = json.loads(OV_CONFIG.read_text(encoding="utf-8")) if OV_CONFIG.exists() else {}
         huoshan_key = existing_ov.get("embedding", {}).get("dense", {}).get("api_key")
-    if not camel.get("api_key") or not huoshan_key:
-        raise RuntimeError("Required Camel or Volcengine API key is missing")
+    if not vlm_key or not huoshan_key:
+        raise RuntimeError("Required OpenViking VLM or embedding API key is missing")
 
-    ov = {
-        "default_account": "default",
-        "default_user": "gwen",
-        "server": {"host": "127.0.0.1", "port": 1933, "auth_mode": "dev", "cors_origins": ["http://127.0.0.1:1933"]},
-        "storage": {"workspace": str(OV_DATA), "agfs": {"backend": "local"}, "vectordb": {"backend": "local", "dimension": 1024}},
-        "embedding": {"dense": {"provider": "volcengine", "api_key": huoshan_key, "api_base": "https://ark.cn-beijing.volces.com/api/v3", "model": "doubao-embedding-vision-251215", "dimension": 1024, "input": "multimodal", "batch_size": 8}},
-        "vlm": {"provider": "openai", "api_key": camel["api_key"], "api_base": camel.get("base_url", "https://api.camel-hub.cn/v1"), "model": "doubao-seed-2-0-lite-260215", "temperature": 0.0, "max_retries": 3, "max_concurrent": 4, "timeout": 180.0},
-        "rerank": {},
-        "output_language_override": "",
-    }
+    ov = patch_openviking_config(existing_ov, vlm_key=vlm_key, embedding_key=huoshan_key)
     ovcli = {"url": "http://127.0.0.1:1933", "account": "default", "user": "gwen", "timeout": 180}
     OV_DIR.mkdir(parents=True, exist_ok=True)
     OV_DATA.mkdir(parents=True, exist_ok=True)
@@ -329,23 +406,11 @@ def main() -> int:
     backup(HERMES_CONFIG)
     config = patch_hermes_config(config)
     write_private(HERMES_CONFIG, yaml.safe_dump(config, allow_unicode=True, sort_keys=False))
-    if DREAMER_PROFILE_CONFIG.exists():
-        backup(DREAMER_PROFILE_CONFIG)
-        dreamer_config = yaml.safe_load(
-            DREAMER_PROFILE_CONFIG.read_text(encoding="utf-8")
-        )
-        dreamer_config = patch_dreamer_profile_config(dreamer_config)
-        write_private(
-            DREAMER_PROFILE_CONFIG,
-            yaml.safe_dump(dreamer_config, allow_unicode=True, sort_keys=False),
-        )
-    profiles_root = HOME / ".hermes/profiles"
-    for profile_config in sorted(profiles_root.glob("*/config.yaml")):
-        if profile_config == DREAMER_PROFILE_CONFIG:
-            continue
+    for profile_config in sorted(HERMES_PROFILES.glob("*/config.yaml")):
         backup(profile_config)
         profile = yaml.safe_load(profile_config.read_text(encoding="utf-8")) or {}
-        patch_skill_ownership(profile, dreamer_owner=False)
+        remove_micu_non_main_routes(profile)
+        patch_skill_config(profile, shared_root=True)
         write_private(
             profile_config,
             yaml.safe_dump(profile, allow_unicode=True, sort_keys=False),

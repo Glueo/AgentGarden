@@ -1,16 +1,16 @@
 ---
 id: system-dream-log
 kind: audit-log
-status: stable
+status: superseded
 source_uris: []
 created: 2026-08-07
-updated: 2026-08-07
+updated: 2026-09-14
 topics: [agent-garden, dream, audit]
 ---
 
-# Dream 审计日志
+# 已退役 Dream 历史审计
 
-自动化每次完整 Dream 在此追加一段简短记录：时间、输入会话、OpenViking snapshot、知识/经验/技能变更、进入人工审查的项目以及 Git commit。
+Dream 自动化已于 2026-09-14 退役。本页只保留此前的审计历史，不再追加自动化记录；当前架构见 [[purpose|目的与边界]] 与 [[policy|自治与写入政策]]。
 
 ## 2026-08-19 Dream
 
