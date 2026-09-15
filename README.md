@@ -8,8 +8,7 @@ Agent Garden 是一套本机优先的人机协同知识系统：Hermes 负责交
 - 在 Obsidian 中查看或修改 `garden/`。
 - `wiki/`、`sources/` 会单向同步到 OpenViking；原始聊天只留在 OpenViking。
 - Hermes 的 bundled、official 与本地 Skills 统一位于 `~/.hermes/skills/`。新增或修改 Skill 只通过明确的 `/learn` 或 `skill_manage` 请求，并经过 Hermes 写入审批与原生变更账本。
-- 日常协调器使用 `anyrouter/gpt-6-astra`，失败后依次回退到 `anyrouter/gpt-5.6-sol`、`openai-codex/gpt-5.6-sol` 和 `micu-api/gpt-5.6-sol`。Micu SOL 只作为主会话最后一级回退，不供 worker、辅助任务、OpenViking 或定时任务使用。AnyRouter 只承载 GPT；其 Claude 系列在实际使用中不可用，已于 2026-09 连同对应的 Hermes 源码补丁一起移除。
-- 普通 `delegate_task` 和代码用 `sol-worker` 使用 `anyrouter/gpt-5.6-sol`，关闭子任务 fallback，不继承主会话的 Micu 备用路由。Kanban 的任务级 provider/model 覆盖优先于 profile 默认配置，派发时按任务记录核对。
+- 日常协调器使用 `anyrouter/gpt-6-astra`，失败后依次回退到 `anyrouter/gpt-5.6-sol`、`openai-codex/gpt-5.6-sol` 和 `micu-api/gpt-5.6-sol`。普通 `delegate_task` 不固定独立模型，原生继承协调器当前主路由与完整 fallback 链；Micu SOL 只作为主会话和其子代理的最后一级回退，不供辅助任务、OpenViking 或定时任务使用。AnyRouter 只承载 GPT；其 Claude 系列在实际使用中不可用，已于 2026-09 连同对应的 Hermes 源码补丁一起移除。
 - OpenViking 的 VLM 通过火山方舟固定使用 `doubao-seed-2-0-lite-260215`；会话提交后的异步记忆提取只消耗该模型的独立 Ark 额度，不使用 Camel、Qwen 或 Micu。
 - Hermes 原生 `web_search` 使用免费 DDGS，原生 `web_extract` 使用 Tavily。
 

@@ -36,9 +36,9 @@ ANYROUTER_GPT_MODELS = (ANYROUTER_PRIMARY_MODEL, ANYROUTER_SOL_MODEL)
 OPENAI_PROVIDER = "openai-codex"
 OPENAI_MODEL = "gpt-5.6-sol"
 
-# The interactive coordinator alone may reach Micu: AnyRouter Astra retries
-# first as the primary, then fallback walks AnyRouter SOL, the OpenAI
-# subscription, and finally the limited paid Micu SOL route.
+# The interactive coordinator and its unpinned delegate_task children share
+# one route: AnyRouter Astra first, then AnyRouter SOL, the OpenAI subscription,
+# and finally the limited paid Micu SOL route.
 MAIN_FALLBACKS = [
     {
         "provider": ANYROUTER_GPT,
@@ -242,14 +242,13 @@ def patch_hermes_config(config: dict) -> dict:
         "api_mode": "codex_responses",
     }
     config["fallback_providers"] = [dict(entry) for entry in MAIN_FALLBACKS]
-    config["delegation"] = {
-        **(config.get("delegation") or {}),
-        "provider": ANYROUTER_GPT,
-        "model": ANYROUTER_SOL_MODEL,
-        "api_mode": "codex_responses",
-        # Child routing is independent of the main session's paid fallback.
-        "fallback_providers": [],
-    }
+    delegation = {**(config.get("delegation") or {})}
+    # An unpinned child inherits both the parent's active primary route and its
+    # fallback chain. Remove stale routing overrides instead of copying the
+    # chain so future main-route changes apply to delegate_task automatically.
+    for key in ("provider", "model", "base_url", "api_key", "api_mode", "fallback_providers"):
+        delegation.pop(key, None)
+    config["delegation"] = delegation
 
 
     config["terminal"] = {
@@ -289,9 +288,9 @@ def patch_hermes_config(config: dict) -> dict:
             **(auxiliary.get(task) or {}),
             "provider": ANYROUTER_GPT,
             "model": ANYROUTER_SOL_MODEL,
-            # Micu SOL is reserved for the interactive coordinator's final
-            # fallback. Auxiliary work starts on AnyRouter and may use the
-            # OpenAI subscription, but never consumes the limited Micu route.
+            # Micu SOL is reserved for the coordinator and its unpinned
+            # delegate_task children. Auxiliary work starts on AnyRouter and
+            # may use the OpenAI subscription, but never consumes Micu.
             "fallback_chain": [dict(entry) for entry in AUXILIARY_FALLBACKS],
         }
     auxiliary["background_review"] = {

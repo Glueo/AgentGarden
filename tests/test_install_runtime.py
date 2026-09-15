@@ -84,12 +84,15 @@ class HermesConfigTests(unittest.TestCase):
         self.assertEqual(patched["auxiliary"]["transient_retries"], 0)
         self.assertFalse(patched["auxiliary"]["background_review"]["enabled"])
 
-    def test_delegation_pins_anyrouter_without_inheriting_main_fallbacks(self):
+    def test_delegation_inherits_the_main_route_and_fallback_chain(self):
         config = {
             "custom_providers": [{"name": "anyrouter", "models": {}}],
             "delegation": {
                 "provider": "micu-api",
                 "model": "gpt-5.6-sol",
+                "base_url": "https://stale.example/v1",
+                "api_key": "stale-key",
+                "api_mode": "chat_completions",
                 "fallback_providers": [{"provider": "micu-api", "model": "gpt-5.6-sol"}],
                 "max_concurrent_children": 2,
             },
@@ -97,13 +100,11 @@ class HermesConfigTests(unittest.TestCase):
 
         patched = install_runtime.patch_hermes_config(config)
 
-        self.assertEqual(patched["delegation"]["provider"], "anyrouter")
-        self.assertEqual(patched["delegation"]["model"], "gpt-5.6-sol")
-        self.assertEqual(patched["delegation"]["api_mode"], "codex_responses")
-        self.assertEqual(patched["delegation"]["fallback_providers"], [])
+        for key in ("provider", "model", "base_url", "api_key", "api_mode", "fallback_providers"):
+            self.assertNotIn(key, patched["delegation"])
         self.assertEqual(patched["delegation"]["max_concurrent_children"], 2)
 
-    def test_auxiliary_tasks_do_not_consume_the_main_only_micu_fallback(self):
+    def test_auxiliary_tasks_do_not_consume_the_coordinator_micu_fallback(self):
         config = {"custom_providers": [{"name": "anyrouter", "models": {}}]}
 
         patched = install_runtime.patch_hermes_config(config)

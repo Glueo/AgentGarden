@@ -25,6 +25,7 @@
 - 未知上传的重试在快照副作用前挂起，保留原恢复记录；新增断言覆盖快照禁写与 `pending.json` 字节不变。
 - AnyRouter Astra 独立收尾复核（`deleg_816ed38c`）通过：136 项任务范围内测试和 4 项独立临时场景通过，安全与逻辑阻塞列表为空。该轮聚焦快照前置检查与上传重试；父会话全套 137 项还包括 1 项既有、非本任务的 provider 测试。
 - 本机 Codex CLI 提交前复审发现并推动修复了任务归并遗漏与非主 profile 的 Micu 直连/备用路由约束；修复后复审通过，阻塞列表为空，139 项全套测试通过。
+- 本轮将普通 `delegate_task` 改为无独立路由配置，验证其原生继承主会话模型与完整 fallback 链；删除三个专用 worker profile 与两个重复路由 Skill，Hermes cron 列表为空。
 - Hermes 原生配置：创建提醒为 0，写入审批与账本启用，后台审查与 Curator 关闭。
 - `git diff --check` 通过；Hermes 源码仓库 `git status --porcelain` 为空。
 
