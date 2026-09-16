@@ -77,14 +77,6 @@ def relative_for_uri(uri: object) -> str:
     return relative
 
 
-def is_garden_resource_uri(uri: object) -> bool:
-    try:
-        relative_for_uri(uri)
-        return True
-    except (ValueError, UnicodeError):
-        return False
-
-
 def validate_delete_uri(uri: str, *, expected: str | None = None, destination: str | None = None) -> str:
     source = relative_parts(relative_for_uri(uri))
     if expected is not None and uri != expected:
@@ -179,11 +171,6 @@ def load_manifest() -> dict:
     if not MANIFEST_PATH.exists():
         return {"version": 2, "files": {}}
     return normalize_manifest(json.loads(MANIFEST_PATH.read_text(encoding="utf-8")))
-
-
-def save_manifest(files: dict) -> None:
-    payload = {"version": 2, "synced_at": datetime.now(timezone.utc).isoformat(), "files": files}
-    atomic_state_module().atomic_write_json(MANIFEST_PATH, payload)
 
 
 def sync_exit_code(files: dict) -> int:

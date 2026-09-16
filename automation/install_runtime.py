@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -15,7 +14,7 @@ HOME = Path.home()
 PROJECT = Path(__file__).resolve().parents[1]
 HERMES_CONFIG = HOME / ".hermes/config.yaml"
 
-# ── AnyRouter routing ─────────────────────────────────────────────────
+# ── Retired AnyRouter route cleanup ──────────────────────────────────
 # AnyRouter serves GPT only. Its Claude models were dropped in 2026-09
 # after they proved unusable in practice, which also retired the
 # ``anthropic_messages`` twin entry and the source patch that taught Hermes
@@ -23,42 +22,37 @@ HERMES_CONFIG = HOME / ".hermes/config.yaml"
 # the Garden only through providers that serve it natively.
 ANYROUTER_BASE_URL = "https://anyrouter.top/v1"
 ANYROUTER_GPT = "anyrouter"
+ANYROUTER_KEY_ENV = "ANYROUTER_API_KEY"
 ANYROUTER_RETIRED = "anyrouter-claude"
-ANYROUTER_CONTEXT_LENGTH = 1_000_000
-ANYROUTER_PRIMARY_MODEL = "gpt-6-astra"
-ANYROUTER_SOL_MODEL = "gpt-5.6-sol"
-ANYROUTER_GPT_MODELS = (ANYROUTER_PRIMARY_MODEL, ANYROUTER_SOL_MODEL)
 
-# Use the standard OpenAI Codex route. The prior Hermes-only ``-900k``
-# selector variant has been retired along with the profile that defined it.
-# Keeping the bare model id here makes a future runtime install converge on
-# the supported 272K Codex context instead of resurrecting that local alias.
-OPENAI_PROVIDER = "openai-codex"
-OPENAI_MODEL = "gpt-5.6-sol"
 
-# The interactive coordinator and its unpinned delegate_task children share
-# one route: AnyRouter Astra first, then AnyRouter SOL, the OpenAI subscription,
-# and finally the limited paid Micu SOL route.
-MAIN_FALLBACKS = [
-    {
-        "provider": ANYROUTER_GPT,
-        "model": ANYROUTER_SOL_MODEL,
-        "api_mode": "codex_responses",
-    },
-    {"provider": OPENAI_PROVIDER, "model": OPENAI_MODEL},
-    {"provider": "micu-api", "model": "gpt-5.6-sol"},
-]
-AUXILIARY_FALLBACKS = [
-    {"provider": OPENAI_PROVIDER, "model": OPENAI_MODEL},
-]
+CODERAPI_BASE_URL = "https://wcf.coderapi.vip/v1"
+CODERAPI_KEY_ENV = "CODERAPI_API_KEY"
+CODERAPI_MODEL = "codex-auto-review-openai-compact"
+CODERAPI_PROVIDER = "coderapi"
 
 AUXILIARY_TASKS = (
-    "title_generation", "approval", "compression", "memory_query_rewrite", "goal_judge",
+    "approval",
+    "background_review",
+    "compression",
+    "curator",
+    "goal_judge",
+    "kanban_decomposer",
+    "mcp",
+    "memory_query_rewrite",
+    "monitor",
+    "moa_aggregator",
+    "moa_reference",
+    "profile_describer",
+    "review",
+    "skills_hub",
+    "title_generation",
+    "triage_specifier",
+    "tts_audio_tags",
+    "vision",
 )
 
 HERMES_ENV = HOME / ".hermes/.env"
-HERMES_SKILLS = HOME / ".hermes/skills"
-HERMES_PROFILES = HOME / ".hermes/profiles"
 OV_DIR = HOME / ".openviking"
 OV_CONFIG = OV_DIR / "ov.conf"
 OVCLI_CONFIG = OV_DIR / "ovcli.conf"
@@ -67,8 +61,7 @@ OV_DATA = HOME / "Library/Application Support/agent-garden/openviking"
 
 def backup(path: Path) -> None:
     if path.exists():
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        shutil.copy2(path, path.with_name(f"{path.name}.agent-garden-{stamp}.bak"))
+        shutil.copy2(path, path.with_name(f"{path.name}.agent-garden.bak"))
 
 
 def provider(config: dict, name: str) -> dict:
@@ -78,113 +71,49 @@ def provider(config: dict, name: str) -> dict:
     raise RuntimeError(f"Hermes provider not found: {name}")
 
 
-def first_provider(config: dict, *names: str) -> dict:
-    for name in names:
-        try:
-            return provider(config, name)
-        except RuntimeError:
-            continue
-    raise RuntimeError(f"Hermes provider not found: {', '.join(names)}")
+def remove_fallback_settings(value) -> None:
+    """Remove every explicitly configured fallback route in place."""
+    if isinstance(value, dict):
+        for key in list(value):
+            if "fallback" in str(key).lower():
+                value.pop(key)
+            else:
+                remove_fallback_settings(value[key])
+    elif isinstance(value, list):
+        for item in value:
+            remove_fallback_settings(item)
 
 
-def patch_skill_config(config: dict, *, shared_root: bool) -> dict:
-    """Use Hermes' native skill root and disable autonomous maintenance."""
+def patch_skill_config(config: dict) -> dict:
+    """Use Hermes' native skill root and native self-improvement defaults."""
     skills = {**(config.get("skills") or {})}
-    raw_external = skills.get("external_dirs") or []
-    if isinstance(raw_external, str):
-        raw_external = [raw_external]
-    garden_skills = str(PROJECT / "garden/skills")
-
-    def is_profile_skill_dir(value: str) -> bool:
-        try:
-            relative = Path(value).expanduser().relative_to(HERMES_PROFILES)
-        except ValueError:
-            return False
-        return len(relative.parts) == 2 and relative.parts[1] == "skills"
-
-    external = []
-    for item in raw_external:
-        value = str(item)
-        if value == garden_skills or is_profile_skill_dir(value):
-            continue
-        external.append(value)
-    if shared_root:
-        external.append(str(HERMES_SKILLS))
+    skills.pop("creation_nudge_interval", None)
     skills.update({
-        "external_dirs": list(dict.fromkeys(external)),
-        "creation_nudge_interval": 0,
+        "external_dirs": [],
         "write_approval": True,
         "ledger": True,
     })
     config["skills"] = skills
-    config["curator"] = {
-        **(config.get("curator") or {}),
-        "enabled": False,
-    }
+    curator = {**(config.get("curator") or {})}
+    curator.pop("enabled", None)
+    if curator:
+        curator["consolidate"] = False
+        config["curator"] = curator
+    else:
+        config.pop("curator", None)
     auxiliary = {**(config.get("auxiliary") or {})}
-    auxiliary["background_review"] = {
-        **(auxiliary.get("background_review") or {}),
-        "enabled": False,
-    }
+    background_review = {**(auxiliary.get("background_review") or {})}
+    background_review.pop("enabled", None)
+    if background_review:
+        auxiliary["background_review"] = background_review
+    else:
+        auxiliary.pop("background_review", None)
     config["auxiliary"] = auxiliary
     return config
 
 
-def remove_micu_non_main_routes(config: dict) -> dict:
-    """Reserve every Micu route for the default profile's final fallback."""
-    direct_routes = [
-        ("model", config.get("model")),
-        ("delegation", config.get("delegation")),
-        *[
-            (f"auxiliary.{name}", route)
-            for name, route in (config.get("auxiliary") or {}).items()
-        ],
-    ]
-    for name, route in direct_routes:
-        if isinstance(route, dict) and route.get("provider") == "micu-api":
-            raise RuntimeError(f"Micu direct route is forbidden outside the default profile: {name}")
-
-    def without_micu(entries: list[dict] | None) -> list[dict]:
-        return [entry for entry in (entries or []) if entry.get("provider") != "micu-api"]
-
-    config["fallback_providers"] = without_micu(config.get("fallback_providers"))
-    for task in (config.get("auxiliary") or {}).values():
-        if not isinstance(task, dict) or "fallback_chain" not in task:
-            continue
-        task["fallback_chain"] = without_micu(task.get("fallback_chain"))
-    delegation = config.get("delegation") or {}
-    if isinstance(delegation, dict) and "fallback_providers" in delegation:
-        delegation["fallback_providers"] = without_micu(delegation.get("fallback_providers"))
-    return config
-
-
-def normalized_anyrouter_models(existing: dict, wanted: tuple[str, ...]) -> dict:
-    """Rebuild an AnyRouter models mapping, repairing corrupted entries.
-
-    An earlier run splayed model-name strings into ``{'0': 'c', '1': 'l', ...}``
-    character maps and left ``name`` holding a display label ("Claude Opus 5")
-    or an empty string instead of the wire id. Neither is valid model
-    metadata, so digit keys are dropped and ``name`` is reset to the alias --
-    safe here because every AnyRouter alias IS its wire id, unlike the camel
-    and micu entries where alias and name legitimately differ.
-    """
-    clean: dict = {}
-    for alias, config in (existing or {}).items():
-        if not isinstance(config, dict):
-            continue
-        clean[alias] = {
-            key: value for key, value in config.items() if not str(key).isdigit()
-        }
-    for alias in wanted:
-        clean.setdefault(alias, {})
-    return {
-        alias: {**config, "name": alias, "context_length": ANYROUTER_CONTEXT_LENGTH}
-        for alias, config in clean.items()
-    }
-
-
-def normalize_anyrouter_provider(config: dict, *, selected_model: str) -> dict:
-    """Keep exactly one AnyRouter entry, on the GPT surface.
+def normalize_anyrouter_provider(config: dict) -> dict:
+    """Remove retired AnyRouter routes without selecting the main model.
 
     Also drops the retired ``anyrouter-claude`` twin and the
     ``context_1m_beta`` opt-in it needed. Both are removed on every run
@@ -202,25 +131,30 @@ def normalize_anyrouter_provider(config: dict, *, selected_model: str) -> dict:
         elif name != ANYROUTER_RETIRED:
             rest.append(item)
     if gpt_entry is None:
-        raise RuntimeError("Hermes provider not found: anyrouter")
+        config["custom_providers"] = rest
+        return config
 
-    models = {
-        alias: value
-        for alias, value in (gpt_entry.get("models") or {}).items()
-        if not str(alias).startswith("claude-")
-    }
+    gpt_entry.pop("api_key", None)
     gpt_entry.pop("context_1m_beta", None)
+    models = {
+        alias: details
+        for alias, details in (gpt_entry.get("models") or {}).items()
+        if alias != "gpt-5.6-sol" and not alias.lower().startswith("claude")
+    }
+    selected_model = str(gpt_entry.get("model") or "")
+    if selected_model == "gpt-5.6-sol" or selected_model.lower().startswith("claude"):
+        gpt_entry.pop("model", None)
     gpt_entry.update({
         "name": ANYROUTER_GPT,
         "base_url": ANYROUTER_BASE_URL,
         "api_mode": "codex_responses",
+        "key_env": ANYROUTER_KEY_ENV,
         # AnyRouter requires this marker even when stale reasoning replay is disabled.
         "extra_body": {
             **(gpt_entry.get("extra_body") or {}),
             "include": ["reasoning.encrypted_content"],
         },
-        "models": normalized_anyrouter_models(models, ANYROUTER_GPT_MODELS),
-        "model": selected_model,
+        "models": models,
     })
     config["custom_providers"] = [*rest, gpt_entry]
     return config
@@ -228,24 +162,29 @@ def normalize_anyrouter_provider(config: dict, *, selected_model: str) -> dict:
 
 def patch_hermes_config(config: dict) -> dict:
     """Apply the reproducible, non-secret Agent Garden Hermes settings."""
+    remove_fallback_settings(config)
     config["custom_providers"] = [
-        item for item in config.get("custom_providers", [])
-        if item.get("name") != "huoshan"
+        {**original} for original in config.get("custom_providers", [])
     ]
 
-    normalize_anyrouter_provider(config, selected_model=ANYROUTER_PRIMARY_MODEL)
+    named_providers = {**(config.get("providers") or {})}
+    coderapi = {**(named_providers.get(CODERAPI_PROVIDER) or {})}
+    for key in ("api_key", "base_url", "url", "api_mode", "model"):
+        coderapi.pop(key, None)
+    coderapi.update({
+        "api": CODERAPI_BASE_URL,
+        "key_env": CODERAPI_KEY_ENV,
+        "transport": "chat_completions",
+        "default_model": CODERAPI_MODEL,
+        "models": {CODERAPI_MODEL: {"name": CODERAPI_MODEL}},
+    })
+    named_providers[CODERAPI_PROVIDER] = coderapi
+    config["providers"] = named_providers
 
-    config["model"] = {
-        **(config.get("model") or {}),
-        "default": ANYROUTER_PRIMARY_MODEL,
-        "provider": ANYROUTER_GPT,
-        "api_mode": "codex_responses",
-    }
-    config["fallback_providers"] = [dict(entry) for entry in MAIN_FALLBACKS]
+    normalize_anyrouter_provider(config)
     delegation = {**(config.get("delegation") or {})}
-    # An unpinned child inherits both the parent's active primary route and its
-    # fallback chain. Remove stale routing overrides instead of copying the
-    # chain so future main-route changes apply to delegate_task automatically.
+    # An unpinned child inherits the active primary route. Remove stale routing
+    # overrides so future main-route changes apply automatically.
     for key in ("provider", "model", "base_url", "api_key", "api_mode", "fallback_providers"):
         delegation.pop(key, None)
     config["delegation"] = delegation
@@ -255,7 +194,7 @@ def patch_hermes_config(config: dict) -> dict:
         **(config.get("terminal") or {}),
         "cwd": str(PROJECT),
     }
-    patch_skill_config(config, shared_root=False)
+    patch_skill_config(config)
     config["memory"] = {
         **(config.get("memory") or {}),
         "provider": "openviking",
@@ -268,7 +207,7 @@ def patch_hermes_config(config: dict) -> dict:
     }
     config["agent"] = {
         **(config.get("agent") or {}),
-        # Give every provider hop five API attempts before fallback.
+        # Retry transient failures on the selected main provider before surfacing them.
         "api_max_retries": 5,
     }
     config["sessions"] = {
@@ -278,37 +217,25 @@ def patch_hermes_config(config: dict) -> dict:
         "auto_archive_days": 7,
         "auto_prune": False,
     }
-    auxiliary = {
-        **(config.get("auxiliary") or {}),
-        # Do not repeat the same failed auxiliary request before fallback.
-        "transient_retries": 0,
-    }
-    for task in AUXILIARY_TASKS:
-        auxiliary[task] = {
-            **(auxiliary.get(task) or {}),
-            "provider": ANYROUTER_GPT,
-            "model": ANYROUTER_SOL_MODEL,
-            # Micu SOL is reserved for the coordinator and its unpinned
-            # delegate_task children. Auxiliary work starts on AnyRouter and
-            # may use the OpenAI subscription, but never consumes Micu.
-            "fallback_chain": [dict(entry) for entry in AUXILIARY_FALLBACKS],
-        }
-    auxiliary["background_review"] = {
-        **(auxiliary.get("background_review") or {}),
-        "enabled": False,
-    }
+    auxiliary = {**(config.get("auxiliary") or {})}
+    auxiliary.pop("transient_retries", None)
+    stream_only = auxiliary.get("stream_only_base_urls")
+    stream_only = list(stream_only) if isinstance(stream_only, list) else []
+    if "wcf.coderapi.vip" not in stream_only:
+        stream_only.append("wcf.coderapi.vip")
+    auxiliary["stream_only_base_urls"] = stream_only
+    task_names = set(AUXILIARY_TASKS)
+    task_names.update(
+        name for name, value in auxiliary.items() if isinstance(value, dict)
+    )
+    for task in sorted(task_names):
+        route = {**(auxiliary.get(task) or {})}
+        for key in ("base_url", "api_key", "api_mode"):
+            route.pop(key, None)
+        route.update({"provider": CODERAPI_PROVIDER, "model": CODERAPI_MODEL})
+        auxiliary[task] = route
     config["auxiliary"] = auxiliary
-
-
-    for item in config.get("custom_providers", []):
-        item_models = item.get("models") or {}
-        if not isinstance(item_models, dict):
-            raise RuntimeError(f"Provider {item.get('name')} models must be a mapping")
-        for alias, model_config in item_models.items():
-            if not isinstance(model_config, dict) or not model_config.get("name"):
-                raise RuntimeError(
-                    f"Provider {item.get('name')} model {alias} is malformed"
-                )
+    remove_fallback_settings(config)
     return config
 
 
@@ -353,7 +280,9 @@ def patch_openviking_config(existing: dict, *, vlm_key: str, embedding_key: str)
         "timeout": 180.0,
     }
     memory = config.setdefault("memory", {})
-    memory["custom_templates_dir"] = str(PROJECT / "openviking/memory-templates")
+    memory.pop("custom_templates_dir", None)
+    if not memory:
+        config.pop("memory")
     config.setdefault("rerank", {})
     config.setdefault("output_language_override", "")
     return config
@@ -382,8 +311,41 @@ def remove_env_keys(path: Path, keys: set[str]) -> None:
     write_private(path, "\n".join(kept) + "\n")
 
 
+def env_value(path: Path, key: str) -> str | None:
+    if not path.exists():
+        return None
+    prefix = f"{key}="
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith(prefix):
+            value = line[len(prefix):].strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+                value = value[1:-1]
+            return value or None
+    return None
+
+
+def required_coderapi_key(config: dict, env_path: Path) -> str:
+    named = config.get("providers") or {}
+    coderapi = named.get(CODERAPI_PROVIDER) if isinstance(named, dict) else None
+    inline = coderapi.get("api_key") if isinstance(coderapi, dict) else None
+    value = os.environ.get(CODERAPI_KEY_ENV) or env_value(env_path, CODERAPI_KEY_ENV) or inline
+    if not value:
+        raise RuntimeError(f"Required {CODERAPI_KEY_ENV} is missing")
+    return value
+
+
 def main() -> int:
     config = yaml.safe_load(HERMES_CONFIG.read_text(encoding="utf-8"))
+    coderapi_key = required_coderapi_key(config, HERMES_ENV)
+    try:
+        anyrouter_key = provider(config, ANYROUTER_GPT).get("api_key")
+    except RuntimeError:
+        anyrouter_key = None
+    model_config = config.get("model") or {}
+    if model_config.get("provider") == ANYROUTER_GPT:
+        anyrouter_key = anyrouter_key or model_config.get("api_key")
+        if anyrouter_key:
+            model_config.pop("api_key", None)
     existing_ov = json.loads(OV_CONFIG.read_text(encoding="utf-8")) if OV_CONFIG.exists() else {}
     vlm_key = approved_vlm_key(existing_ov)
     try:
@@ -405,16 +367,16 @@ def main() -> int:
     backup(HERMES_CONFIG)
     config = patch_hermes_config(config)
     write_private(HERMES_CONFIG, yaml.safe_dump(config, allow_unicode=True, sort_keys=False))
-    for profile_config in sorted(HERMES_PROFILES.glob("*/config.yaml")):
-        backup(profile_config)
-        profile = yaml.safe_load(profile_config.read_text(encoding="utf-8")) or {}
-        remove_micu_non_main_routes(profile)
-        patch_skill_config(profile, shared_root=True)
-        write_private(
-            profile_config,
-            yaml.safe_dump(profile, allow_unicode=True, sort_keys=False),
-        )
-    patch_env(HERMES_ENV, {"OPENVIKING_ENDPOINT": "http://127.0.0.1:1933", "OPENVIKING_ACCOUNT": "default", "OPENVIKING_USER": "gwen", "OPENVIKING_AGENT": "hermes"})
+    env_values = {
+        "OPENVIKING_ENDPOINT": "http://127.0.0.1:1933",
+        "OPENVIKING_ACCOUNT": "default",
+        "OPENVIKING_USER": "gwen",
+        "OPENVIKING_AGENT": "hermes",
+        CODERAPI_KEY_ENV: coderapi_key,
+    }
+    if anyrouter_key:
+        env_values[ANYROUTER_KEY_ENV] = anyrouter_key
+    patch_env(HERMES_ENV, env_values)
     remove_env_keys(HERMES_ENV, {"TERMINAL_CWD", "MESSAGING_CWD"})
     print("Runtime configuration installed; secrets remained outside the project.")
     return 0

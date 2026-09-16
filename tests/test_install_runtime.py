@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import os
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "automation/install_runtime.py"
@@ -14,8 +17,27 @@ SPEC.loader.exec_module(install_runtime)
 
 
 class HermesConfigTests(unittest.TestCase):
-    def test_patch_repairs_anyrouter_models_without_dropping_existing_models(self):
+    def test_backup_keeps_one_latest_copy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.yaml"
+            path.write_text("first", encoding="utf-8")
+            install_runtime.backup(path)
+            path.write_text("second", encoding="utf-8")
+            install_runtime.backup(path)
+
+            backups = list(path.parent.glob("config.yaml.agent-garden*.bak"))
+            self.assertEqual(backups, [path.with_name("config.yaml.agent-garden.bak")])
+            self.assertEqual(backups[0].read_text(encoding="utf-8"), "second")
+
+    def test_patch_removes_retired_anyrouter_sol_model(self):
         config = {
+            "model": {
+                "default": "user-selected-model",
+                "provider": "user-selected-provider",
+                "api_mode": "user-selected-mode",
+                "base_url": "https://user-selected.example/v1",
+                "context_length": 123456,
+            },
             "custom_providers": [
                 {
                     "name": "anyrouter",
@@ -24,67 +46,68 @@ class HermesConfigTests(unittest.TestCase):
                         "gpt-5.6-sol": {"0": "c", "1": "l", "name": "gpt-5.6-sol"},
                         "claude-opus-5": {"0": "c", "name": "Claude Opus 5"},
                     },
-                }
+                    "extra_body": {
+                        "include": [],
+                        "metadata": {"preserve": True},
+                    },
+                },
+                {"name": "micu-api", "models": {"gpt-5.6-sol": {"name": "gpt-5.6-sol"}}},
+                {"name": "camel", "models": {"qwen3.8-max": {"name": "qwen-3.8-max"}}},
             ]
         }
 
         patched = install_runtime.patch_hermes_config(copy.deepcopy(config))
         gpt = install_runtime.provider(patched, "anyrouter")
 
-        # Character-splayed keys are dropped and ``name`` is reset to the
-        # wire id, not the display label the corrupted entry carried.
-        self.assertEqual(gpt["models"]["gpt-5.6-sol"]["name"], "gpt-5.6-sol")
-        self.assertNotIn("0", gpt["models"]["gpt-5.6-sol"])
-
-        # AnyRouter serves GPT only; its Claude models and the retired twin
-        # entry are dropped rather than carried on a surface that 404s them.
+        # AnyRouter no longer serves SOL, and never served Claude reliably.
+        # Retired models must be removed even when a stale config still has
+        # malformed metadata for them.
+        self.assertNotIn("gpt-5.6-sol", gpt["models"])
         self.assertNotIn("claude-opus-5", gpt["models"])
+        self.assertEqual(gpt["models"], {})
         self.assertEqual(gpt["api_mode"], "codex_responses")
+        self.assertEqual(
+            gpt["extra_body"],
+            {
+                "include": ["reasoning.encrypted_content"],
+                "metadata": {"preserve": True},
+            },
+        )
         self.assertNotIn("context_1m_beta", gpt)
+        self.assertNotIn("api_key", gpt)
+        self.assertEqual(gpt["key_env"], "ANYROUTER_API_KEY")
         self.assertEqual(
             [item["name"] for item in patched["custom_providers"] if item["name"].startswith("anyrouter")],
             ["anyrouter"],
         )
+        self.assertIn("camel", [item["name"] for item in patched["custom_providers"]])
+        self.assertIn("micu-api", [item["name"] for item in patched["custom_providers"]])
 
-        for alias, model in gpt["models"].items():
-            self.assertEqual(model["context_length"], 1_000_000, alias)
-
-        self.assertEqual(
-            patched["model"],
-            {
-                "default": "gpt-6-astra",
-                "provider": "anyrouter",
-                "api_mode": "codex_responses",
-            },
-        )
-        self.assertEqual(
-            patched["fallback_providers"],
-            [
-                {
-                    "provider": "anyrouter",
-                    "model": "gpt-5.6-sol",
-                    "api_mode": "codex_responses",
-                },
-                {"provider": "openai-codex", "model": "gpt-5.6-sol"},
-                {"provider": "micu-api", "model": "gpt-5.6-sol"},
-            ],
-        )
+        self.assertNotIn("model", gpt)
+        self.assertEqual(patched["model"], config["model"])
+        self.assertFalse(any("fallback" in key.lower() for key in patched))
+        coderapi = patched["providers"]["coderapi"]
+        self.assertEqual(coderapi["api"], "https://wcf.coderapi.vip/v1")
+        self.assertEqual(coderapi["key_env"], "CODERAPI_API_KEY")
+        self.assertEqual(coderapi["transport"], "chat_completions")
+        self.assertEqual(coderapi["default_model"], "codex-auto-review-openai-compact")
+        self.assertNotIn("api_key", coderapi)
         self.assertEqual(patched["terminal"]["cwd"], str(install_runtime.PROJECT))
         self.assertEqual(patched["skills"]["external_dirs"], [])
-        self.assertEqual(patched["skills"]["creation_nudge_interval"], 0)
+        self.assertNotIn("creation_nudge_interval", patched["skills"])
         self.assertTrue(patched["skills"]["write_approval"])
         self.assertTrue(patched["skills"]["ledger"])
-        self.assertFalse(patched["curator"]["enabled"])
+        self.assertNotIn("curator", patched)
         self.assertEqual(patched["web"]["search_backend"], "ddgs")
         self.assertEqual(patched["web"]["extract_backend"], "tavily")
         self.assertEqual(patched["agent"]["api_max_retries"], 5)
         self.assertTrue(patched["sessions"]["auto_archive"])
         self.assertEqual(patched["sessions"]["auto_archive_days"], 7)
         self.assertFalse(patched["sessions"]["auto_prune"])
-        self.assertEqual(patched["auxiliary"]["transient_retries"], 0)
-        self.assertFalse(patched["auxiliary"]["background_review"]["enabled"])
+        self.assertNotIn("transient_retries", patched["auxiliary"])
+        self.assertEqual(patched["auxiliary"]["stream_only_base_urls"], ["wcf.coderapi.vip"])
 
-    def test_delegation_inherits_the_main_route_and_fallback_chain(self):
+    def test_delegation_inherits_the_single_main_route(self):
         config = {
             "custom_providers": [{"name": "anyrouter", "models": {}}],
             "delegation": {
@@ -104,21 +127,62 @@ class HermesConfigTests(unittest.TestCase):
             self.assertNotIn(key, patched["delegation"])
         self.assertEqual(patched["delegation"]["max_concurrent_children"], 2)
 
-    def test_auxiliary_tasks_do_not_consume_the_coordinator_micu_fallback(self):
-        config = {"custom_providers": [{"name": "anyrouter", "models": {}}]}
+    def test_missing_anyrouter_does_not_force_a_main_provider(self):
+        config = {
+            "model": {"default": "chosen", "provider": "manual"},
+            "custom_providers": [{"name": "manual", "models": {"chosen": {}}}],
+        }
+
+        patched = install_runtime.patch_hermes_config(copy.deepcopy(config))
+
+        self.assertEqual(patched["model"], config["model"])
+        self.assertEqual(patched["custom_providers"], config["custom_providers"])
+
+    def test_every_auxiliary_task_uses_coderapi_without_fallback(self):
+        config = {
+            "custom_providers": [{"name": "anyrouter", "models": {}}],
+            "auxiliary": {
+                "plugin_registered_task": {"provider": "old", "model": "old"},
+                "stream_only_base_urls": ["existing.example"],
+            },
+        }
 
         patched = install_runtime.patch_hermes_config(config)
 
-        for task in install_runtime.AUXILIARY_TASKS:
-            self.assertEqual(patched["auxiliary"][task]["provider"], "anyrouter")
-            self.assertEqual(patched["auxiliary"][task]["model"], "gpt-5.6-sol")
-            self.assertEqual(
-                patched["auxiliary"][task]["fallback_chain"],
-                [{"provider": "openai-codex", "model": "gpt-5.6-sol"}],
-                task,
-            )
+        for task in (*install_runtime.AUXILIARY_TASKS, "plugin_registered_task"):
+            route = patched["auxiliary"][task]
+            self.assertEqual(route["provider"], "coderapi")
+            self.assertEqual(route["model"], "codex-auto-review-openai-compact")
+            self.assertNotIn("base_url", route)
+            self.assertNotIn("api_key", route)
+            self.assertNotIn("api_mode", route)
+            self.assertNotIn("fallback_chain", route, task)
+        self.assertEqual(
+            patched["auxiliary"]["stream_only_base_urls"],
+            ["existing.example", "wcf.coderapi.vip"],
+        )
 
-    def test_goal_judge_has_an_explicit_non_micu_route(self):
+    def test_coderapi_key_is_migrated_or_required(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env_path = Path(directory) / ".env"
+            inline = {"providers": {"coderapi": {"api_key": "inline-test-key"}}}
+            with mock.patch.dict(os.environ, {"CODERAPI_API_KEY": ""}):
+                self.assertEqual(
+                    install_runtime.required_coderapi_key(inline, env_path),
+                    "inline-test-key",
+                )
+
+                env_path.write_text("CODERAPI_API_KEY=env-test-key\n", encoding="utf-8")
+                self.assertEqual(
+                    install_runtime.required_coderapi_key({}, env_path),
+                    "env-test-key",
+                )
+
+                env_path.unlink()
+                with self.assertRaisesRegex(RuntimeError, "CODERAPI_API_KEY"):
+                    install_runtime.required_coderapi_key({}, env_path)
+
+    def test_goal_judge_has_an_explicit_coderapi_route(self):
         config = {
             "custom_providers": [{"name": "anyrouter", "models": {}}],
             "auxiliary": {"goal_judge": {}},
@@ -127,23 +191,77 @@ class HermesConfigTests(unittest.TestCase):
         patched = install_runtime.patch_hermes_config(config)
         judge = patched["auxiliary"]["goal_judge"]
 
-        self.assertEqual(judge.get("provider"), "anyrouter")
-        self.assertEqual(judge.get("model"), "gpt-5.6-sol")
-        self.assertEqual(
-            judge.get("fallback_chain"),
-            [{"provider": "openai-codex", "model": "gpt-5.6-sol"}],
-        )
+        self.assertEqual(judge.get("provider"), "coderapi")
+        self.assertEqual(judge.get("model"), "codex-auto-review-openai-compact")
+        self.assertNotIn("fallback_chain", judge)
 
-    def test_auxiliary_chain_is_not_shared_state_with_the_main_chain(self):
+    def test_all_fallback_settings_are_removed_recursively(self):
         patched = install_runtime.patch_hermes_config(
-            {"custom_providers": [{"name": "anyrouter", "models": {}}]}
+            {
+                "custom_providers": [{"name": "anyrouter", "models": {}}],
+                "fallback_model": {"provider": "old", "model": "old"},
+                "fallback_models": ["old"],
+                "fallback_providers": [{"provider": "old", "model": "old"}],
+                "delegation": {
+                    "fallback_providers": [{"provider": "old", "model": "old"}],
+                },
+                "auxiliary": {
+                    "approval": {
+                        "fallback_chain": [{"provider": "old", "model": "old"}],
+                    },
+                    "custom_nested": {"fallback_model": "old"},
+                },
+            }
         )
 
-        patched["fallback_providers"][1]["model"] = "mutated"
+        def fallback_paths(value, path=()):
+            if isinstance(value, dict):
+                for key, nested in value.items():
+                    if "fallback" in key.lower():
+                        yield ".".join((*path, key))
+                    yield from fallback_paths(nested, (*path, key))
+            elif isinstance(value, list):
+                for index, nested in enumerate(value):
+                    yield from fallback_paths(nested, (*path, str(index)))
 
-        self.assertEqual(
-            patched["auxiliary"]["approval"]["fallback_chain"][0]["model"],
-            "gpt-5.6-sol",
+        self.assertEqual(list(fallback_paths(patched)), [])
+
+    def test_no_route_uses_retired_anyrouter_sol(self):
+        patched = install_runtime.patch_hermes_config(
+            {
+                "custom_providers": [
+                    {"name": "anyrouter", "models": {"gpt-5.6-sol": {}}}
+                ],
+                "fallback_providers": [
+                    {"provider": "anyrouter", "model": "gpt-5.6-sol"}
+                ],
+                "auxiliary": {
+                    "approval": {
+                        "provider": "anyrouter",
+                        "model": "gpt-5.6-sol",
+                        "fallback_chain": [
+                            {"provider": "anyrouter", "model": "gpt-5.6-sol"}
+                        ],
+                    }
+                },
+            }
+        )
+
+        def routes(value):
+            if isinstance(value, dict):
+                yield value
+                for nested in value.values():
+                    yield from routes(nested)
+            elif isinstance(value, list):
+                for nested in value:
+                    yield from routes(nested)
+
+        self.assertFalse(
+            any(
+                route.get("provider") == "anyrouter"
+                and route.get("model") == "gpt-5.6-sol"
+                for route in routes(patched)
+            )
         )
 
     def test_retired_anyrouter_claude_entry_is_removed(self):
@@ -176,105 +294,21 @@ class HermesConfigTests(unittest.TestCase):
         self.assertNotIn("anyrouter-claude", names)
         gpt = install_runtime.provider(patched, "anyrouter")
         self.assertNotIn("context_1m_beta", gpt)
-        self.assertEqual(set(gpt["models"]), {"gpt-6-astra", "gpt-5.6-sol"})
+        self.assertEqual(gpt["models"], {})
 
     def test_every_anyrouter_reference_pins_its_api_mode(self):
         """AnyRouter is never left to Hermes' chat_completions default.
 
-        A model or fallback entry defaults to chat_completions unless it pins
-        a mode, and anyrouter.top is not a host Hermes auto-detects. An
-        unpinned reference is sent over the wrong wire and burns its retries
-        on 404 before anything advances. Covers the primary model block, the
-        provider entry, and every chain hop, so adding an AnyRouter fallback
-        later cannot reintroduce the bug.
+        A model entry defaults to chat_completions unless it pins a mode, and
+        anyrouter.top is not a host Hermes auto-detects. An unpinned reference
+        is sent over the wrong wire and burns its retries on 404.
         """
-        configs = [
-            install_runtime.patch_hermes_config(
-                {"custom_providers": [{"name": "anyrouter", "models": {}}]}
-            ),
-        ]
-
-        checked = 0
-        for config in configs:
-            references = [
-                config["model"],
-                install_runtime.provider(config, "anyrouter"),
-                *config["fallback_providers"],
-                *[
-                    entry
-                    for task in install_runtime.AUXILIARY_TASKS
-                    for entry in (config.get("auxiliary") or {})
-                    .get(task, {})
-                    .get("fallback_chain", [])
-                ],
-            ]
-            for entry in references:
-                if entry.get("provider", entry.get("name")) != "anyrouter":
-                    continue
-                self.assertEqual(entry.get("api_mode"), "codex_responses", entry)
-                checked += 1
-        self.assertTrue(checked, "no AnyRouter references were checked")
-
-    def test_patch_rejects_malformed_unrepaired_models(self):
-        config = {
-            "custom_providers": [
-                {"name": "anyrouter", "models": {}},
-                {"name": "broken", "models": {"bad": "not-a-mapping"}},
-            ]
-        }
-        with self.assertRaisesRegex(RuntimeError, "broken model bad"):
-            install_runtime.patch_hermes_config(config)
-
-
-    def test_non_main_profiles_drop_micu_from_fallback_routes(self):
-        config = {
-            "fallback_providers": [
-                {"provider": "micu-api", "model": "gpt-5.6-sol"},
-                {"provider": "openai-codex", "model": "gpt-5.6-sol"},
-            ],
-            "auxiliary": {
-                "compression": {
-                    "fallback_chain": [
-                        {"provider": "micu-api", "model": "gpt-5.6-sol"},
-                        {"provider": "openai-codex", "model": "gpt-5.6-sol"},
-                    ]
-                }
-            },
-            "delegation": {
-                "provider": "anyrouter",
-                "model": "gpt-5.6-sol",
-                "fallback_providers": [
-                    {"provider": "micu-api", "model": "gpt-5.6-sol"},
-                    {"provider": "openai-codex", "model": "gpt-5.6-sol"},
-                ],
-            },
-        }
-
-        patched = install_runtime.remove_micu_non_main_routes(config)
-
-        self.assertEqual(
-            patched["fallback_providers"],
-            [{"provider": "openai-codex", "model": "gpt-5.6-sol"}],
-        )
-        self.assertEqual(
-            patched["auxiliary"]["compression"]["fallback_chain"],
-            [{"provider": "openai-codex", "model": "gpt-5.6-sol"}],
-        )
-        self.assertEqual(
-            patched["delegation"]["fallback_providers"],
-            [{"provider": "openai-codex", "model": "gpt-5.6-sol"}],
+        config = install_runtime.patch_hermes_config(
+            {"custom_providers": [{"name": "anyrouter", "models": {}}]}
         )
 
-    def test_non_main_profiles_reject_direct_micu_routes(self):
-        configs = {
-            "main model": {"model": {"provider": "micu-api", "default": "gpt-5.6-sol"}},
-            "delegation": {"delegation": {"provider": "micu-api", "model": "gpt-5.6-sol"}},
-            "auxiliary": {"auxiliary": {"compression": {"provider": "micu-api", "model": "gpt-5.6-sol"}}},
-        }
-
-        for route, config in configs.items():
-            with self.subTest(route=route), self.assertRaisesRegex(RuntimeError, "Micu"):
-                install_runtime.remove_micu_non_main_routes(config)
+        entry = install_runtime.provider(config, "anyrouter")
+        self.assertEqual(entry.get("api_mode"), "codex_responses", entry)
 
     def test_patching_twice_is_idempotent(self):
         config = {
@@ -288,32 +322,42 @@ class HermesConfigTests(unittest.TestCase):
 
         self.assertEqual(once, twice)
 
-    def test_worker_skill_config_uses_the_shared_root_and_preserves_unrelated_dirs(self):
-        config = {
-            "skills": {
-                "external_dirs": [
-                    "/shared/team-skills",
-                    str(install_runtime.PROJECT / "garden/skills"),
-                    str(install_runtime.HOME / ".hermes/profiles/retired/skills"),
-                ]
+    def test_skill_config_restores_native_background_defaults(self):
+        patched = install_runtime.patch_skill_config(
+            {
+                "skills": {
+                    "creation_nudge_interval": 0,
+                    "external_dirs": [
+                        str(install_runtime.PROJECT / "garden/skills"),
+                        str(install_runtime.HOME / ".hermes/profiles/retired/skills"),
+                    ],
+                },
+                "curator": {
+                    "enabled": False,
+                    "interval_hours": 24,
+                    "consolidate": True,
+                },
+                "auxiliary": {
+                    "background_review": {
+                        "enabled": False,
+                        "max_input_tokens": 1234,
+                    }
+                },
             }
-        }
-
-        patched = install_runtime.patch_skill_config(config, shared_root=True)
-
-        self.assertEqual(
-            patched["skills"]["external_dirs"],
-            ["/shared/team-skills", str(install_runtime.HERMES_SKILLS)],
         )
-        self.assertEqual(patched["skills"]["creation_nudge_interval"], 0)
-        self.assertTrue(patched["skills"]["write_approval"])
-        self.assertTrue(patched["skills"]["ledger"])
-        self.assertFalse(patched["curator"]["enabled"])
 
-    def test_worker_skill_config_disables_background_review(self):
-        patched = install_runtime.patch_skill_config({}, shared_root=True)
-
-        self.assertFalse(patched["auxiliary"]["background_review"]["enabled"])
+        self.assertNotIn("creation_nudge_interval", patched["skills"])
+        self.assertEqual(patched["skills"]["external_dirs"], [])
+        self.assertNotIn("enabled", patched["curator"])
+        self.assertEqual(
+            patched["curator"],
+            {"interval_hours": 24, "consolidate": False},
+        )
+        self.assertNotIn("enabled", patched["auxiliary"]["background_review"])
+        self.assertEqual(
+            patched["auxiliary"]["background_review"]["max_input_tokens"],
+            1234,
+        )
 
 
 class OpenVikingConfigTests(unittest.TestCase):
@@ -396,10 +440,7 @@ class OpenVikingConfigTests(unittest.TestCase):
         )
         self.assertEqual(patched["vlm"]["model"], "doubao-seed-2-0-lite-260215")
         self.assertEqual(patched["vlm"]["api_key"], "ark-key")
-        self.assertEqual(
-            patched["memory"]["custom_templates_dir"],
-            str(install_runtime.PROJECT / "openviking/memory-templates"),
-        )
+        self.assertNotIn("memory", patched)
 
     def test_patching_twice_is_idempotent(self):
         once = install_runtime.patch_openviking_config(
