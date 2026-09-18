@@ -5,6 +5,6 @@ dependencies:
   - python=3.11
   - pip
   - pip:
-      - openviking==0.4.9
-      # OpenViking 0.4.9 imports mcp.server.fastmcp; MCP 2.0 removed it.
+      - openviking==0.4.20
+      # OpenViking 0.4.20 imports mcp.server.fastmcp; MCP 2.0 removed it.
       - mcp==1.29.0
