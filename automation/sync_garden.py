@@ -813,7 +813,7 @@ def main() -> int:
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0
 
-    client = SyncHTTPClient(url=args.url, account="default", user="gwen", actor_peer_id="hermes")
+    client = SyncHTTPClient(url=args.url, account="default", user="gwen")
     deleter = GardenDeletionHTTP(args.url)
     client.initialize()
     module = atomic_state_module()
