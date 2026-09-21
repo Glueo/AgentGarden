@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>如何将用户程序变为可执行程序？｜大厂面试题｜操作系统高频面试题｜编译、链接、预处理、汇编 | 卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文</title>
+    <meta name="generator" content="VuePress 1.9.10">
+    <link rel="icon" href="https://file1.kamacoder.com/i/web/2025-08-14kamabij.jpg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script>
+      var _hmt = _hmt || [];
+      (function() {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?2ea20ae8da307f7b54137ae9b4fc95b0";
+        var s = document.getElementsByTagName("script")[0]; 
+        s.parentNode.insertBefore(hm, s);
+      })();
+       // 统计每个页面的UV、PV，核心：监听 VuePress 路由变化，主动上报页面访问
+      document.addEventListener('vuepress:routeChanged', () => {
+        if (window._hmt) {
+          _hmt.push(['_trackPageview', window.location.pathname + window.location.hash]);
+        }
+      });
+    </script>
+    <meta name="description" content="这道面试题考察程序从源代码到可执行文件的完整构建过程，是编译原理和系统编程的高频考点。核心答案包括预处理、编译、汇编、链接四大阶段，并需掌握静态链接与动态链接的区别、重定位的概念以及编译与解释的对比。本文详细解析了每个步骤的作用（如宏替换、生成目标文件、符号解析），并提供了GCC命令示例，帮助理解如何将用户程序变为可执行程序。">
+    <meta property="article:modified_time" content="2026-03-10T10:08:48.000Z">
+    <meta property="og:site_name" content="卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文">
+    <meta property="og:title" content="如何将用户程序变为可执行程序？｜大厂面试题｜操作系统高频面试题｜编译、链接、预处理、汇编">
+    <meta property="og:description" content="这道面试题考察程序从源代码到可执行文件的完整构建过程，是编译原理和系统编程的高频考点。核心答案包括预处理、编译、汇编、链接四大阶段，并需掌握静态链接与动态链接的区别、重定位的概念以及编译与解释的对比。本文详细解析了每个步骤的作用（如宏替换、生成目标文件、符号解析），并提供了GCC命令示例，帮助理解如何将用户程序变为可执行程序。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="/base/program-compilation.html">
+    <meta name="twitter:title" content="如何将用户程序变为可执行程序？｜大厂面试题｜操作系统高频面试题｜编译、链接、预处理、汇编">
+    <meta name="twitter:description" content="这道面试题考察程序从源代码到可执行文件的完整构建过程，是编译原理和系统编程的高频考点。核心答案包括预处理、编译、汇编、链接四大阶段，并需掌握静态链接与动态链接的区别、重定位的概念以及编译与解释的对比。本文详细解析了每个步骤的作用（如宏替换、生成目标文件、符号解析），并提供了GCC命令示例，帮助理解如何将用户程序变为可执行程序。">
+    <meta name="twitter:url" content="/base/program-compilation.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:label2" content="Filed under">
+    <meta name="twitter:data2" content="大厂面试题, 操作系统, 编译原理, 高频考点, C/C++, 系统编程">
+    <meta property="article:tag" content="大厂面试题">
+    <meta name="keywords" content="如何将用户程序变为可执行程序,程序编译过程,编译链接步骤,预处理编译汇编链接,静态链接动态链接区别,重定位是什么,编译和解释的区别,大厂面试题,高频面试题,编译原理面试题,C++编译过程,GCC编译命令,目标文件,可执行文件生成">
+    <meta name="tags" content="大厂面试题,操作系统,编译原理,高频考点,C/C++,系统编程">
+    <meta name="theme-color" content="#3eaf7c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
+    <link rel="preload" href="/assets/css/0.styles.88f5c8c7.css" as="style"><link rel="preload" href="/assets/js/app.9998fd5e.js" as="script"><link rel="preload" href="/assets/js/2.a7b01108.js" as="script"><link rel="preload" href="/assets/js/1.86f1b283.js" as="script"><link rel="preload" href="/assets/js/83.2f31138d.js" as="script">
+    <link rel="stylesheet" href="/assets/css/0.styles.88f5c8c7.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container sidebar-open"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/" class="home-link router-link-active"><!----> <span class="site-name">卡码笔记-最强八股文</span></a> <div class="links"><!----> <nav class="nav-links can-hide"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav>  <ul class="sidebar-links"><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading open"><span>操作系统</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>基础概念</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>进程与线程</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>中断与异常</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>同步与互斥</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>死锁</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>内存管理</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>I/O 与设备管理</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading open"><span>其他</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/base/processor-states.html" class="sidebar-link">处理机有哪两种状态？</a></li><li><a href="/base/user-mode-vs-kernel-mode.html" class="sidebar-link">解释一下用户态和内核态</a></li><li><a href="/base/program-compilation.html" aria-current="page" class="active sidebar-link">如何将用户程序变为可执行程序？</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/base/program-compilation.html#简要回答" class="sidebar-link">简要回答</a></li><li class="sidebar-sub-header"><a href="/base/program-compilation.html#详细回答" class="sidebar-link">详细回答</a></li><li class="sidebar-sub-header"><a href="/base/program-compilation.html#代码示例" class="sidebar-link">代码示例</a></li><li class="sidebar-sub-header"><a href="/base/program-compilation.html#知识拓展" class="sidebar-link">知识拓展</a></li></ul></li><li><a href="/base/hard-link-vs-soft-link.html" class="sidebar-link">硬链接与软链接的区别？</a></li><li><a href="/base/scheduling-types.html" class="sidebar-link">作业调度、内存调度、进程调度的区别？</a></li></ul></section></li></ul></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>网络</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>数据库</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>计算机组成原理</span> <span class="arrow right"></span></p> <!----></section></li></ul> </aside> <main class="page"> <div class="page-meta-host" style="display:none;"></div> <!----> <div class="theme-default-content content__default"><h1 id="如何将用户程序变为可执行程序"><a href="#如何将用户程序变为可执行程序" class="header-anchor">#</a> 如何将用户程序变为可执行程序？</h1> <h2 id="简要回答"><a href="#简要回答" class="header-anchor">#</a> 简要回答</h2> <p>将用户程序（源代码）变为可执行程序需要经过<strong>编译、链接</strong>两个主要阶段：</p> <p><strong>编译</strong>：将<strong>高级语言源代码</strong>翻译成<strong>机器相关的目标代码</strong></p> <p><strong>链接</strong>：将<strong>多个目标文件</strong>和<strong>库文件</strong>组合成<strong>最终可执行文件</strong></p> <h2 id="详细回答"><a href="#详细回答" class="header-anchor">#</a> 详细回答</h2> <p>完整构建过程：</p> <ol><li><p><strong>预处理</strong>（Preprocessing）
+处理以#开头的<strong>预处理指令</strong>，
+<strong>展开头文件</strong>（#include），
+<strong>宏替换</strong>（#define），
+<strong>条件编译</strong>（#ifdef等），
+生成<strong>纯C/C++文件</strong></p></li> <li><p><strong>编译</strong>（Compilation）
+词法分析：将<strong>源代码分解为token</strong>（关键字、标识符、常量等），
+语法分析：构建<strong>抽象语法树（AST）</strong>，
+<strong>语义分析</strong>：类型检查、作用域分析，
+代码优化：<strong>中间代码生成和优化</strong>，
+代码生成：生成特<strong>定目标机器的汇编代码</strong></p></li> <li><p><strong>汇编</strong>（Assembly）
+将<strong>汇编代码</strong>翻译成<strong>机器指令</strong>
+生成<strong>目标文件</strong>（.o或.obj）
+包含<strong>代码段、数据段、符号表、重定位信息</strong></p></li> <li><p><strong>链接</strong>（Linking）
+符号解析：<strong>解析函数和变量的引用</strong>，
+地址分配：为<strong>各段分配运行时内存地址</strong>，
+<strong>重定位</strong>：修正目标文件中的相对地址，
+库链接：<strong>链接静态库或动态库</strong>，
+生成<strong>最终可执行文件</strong></p></li></ol> <h2 id="代码示例"><a href="#代码示例" class="header-anchor">#</a> 代码示例</h2> <div class="language-c line-numbers-mode"><pre class="language-c"><code># <span class="token number">1.</span> 预处理（生成main<span class="token punctuation">.</span>i和math_utils<span class="token punctuation">.</span>i）
+g<span class="token operator">++</span> <span class="token operator">-</span>E main<span class="token punctuation">.</span>cpp <span class="token operator">-</span>o main<span class="token punctuation">.</span>i
+g<span class="token operator">++</span> <span class="token operator">-</span>E math_utils<span class="token punctuation">.</span>cpp <span class="token operator">-</span>o math_utils<span class="token punctuation">.</span>i
+
+# <span class="token number">2.</span> 编译为汇编代码（生成main<span class="token punctuation">.</span>s和math_utils<span class="token punctuation">.</span>s）
+g<span class="token operator">++</span> <span class="token operator">-</span>S main<span class="token punctuation">.</span>cpp <span class="token operator">-</span>o main<span class="token punctuation">.</span>s
+g<span class="token operator">++</span> <span class="token operator">-</span>S math_utils<span class="token punctuation">.</span>cpp <span class="token operator">-</span>o math_utils<span class="token punctuation">.</span>s
+
+# <span class="token number">3.</span> 汇编为目标文件（生成main<span class="token punctuation">.</span>o和math_utils<span class="token punctuation">.</span>o）
+g<span class="token operator">++</span> <span class="token operator">-</span>c main<span class="token punctuation">.</span>cpp <span class="token operator">-</span>o main<span class="token punctuation">.</span>o
+g<span class="token operator">++</span> <span class="token operator">-</span>c math_utils<span class="token punctuation">.</span>cpp <span class="token operator">-</span>o math_utils<span class="token punctuation">.</span>o
+
+# <span class="token number">4.</span> 链接为可执行文件（生成main）
+g<span class="token operator">++</span> main<span class="token punctuation">.</span>o math_utils<span class="token punctuation">.</span>o <span class="token operator">-</span>o main
+
+# 或者一步完成（不推荐用于学习）
+g<span class="token operator">++</span> main<span class="token punctuation">.</span>cpp math_utils<span class="token punctuation">.</span>cpp <span class="token operator">-</span>o main
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br><span class="line-number">17</span><br></div></div><h2 id="知识拓展"><a href="#知识拓展" class="header-anchor">#</a> 知识拓展</h2> <ul><li>静态链接 vs 动态链接</li></ul> <p><strong>静态链接</strong>：
+库代码直接复制到可执行文件中,
+文件较大，但运行时不依赖外部库,
+使用-static选项</p> <p><strong>动态链接</strong>：
+可执行文件只包含库引用,
+运行时由动态链接器加载库,
+节省磁盘和内存空间,
+便于库更新</p> <ul><li>知识图解</li></ul> <p><img src="https://file1.kamacoder.com/i/bagu/2026012101.png" alt="程序从存储到执行的内存映射图"></p> <ul><li>面试官很能追问</li></ul> <p>Q1：编译和解释的区别？</p> <p>A1：
+编译：一次性将源代码翻译成机器码，执行效率高
+解释：逐行翻译执行，便于调试，执行效率较低
+即时编译：运行时编译热点代码，结合两者优点</p> <p>Q2：什么是重定位？</p> <p>A2：
+链接器将多个目标文件的相同段合并时，需要调整相对地址
+重定位表记录所有需要修正的地址引用
+分为链接时重定位和加载时重定位</p> <p>Q3：如何减少编译时间？</p> <p>A3：
+使用预编译头文件,
+增量编译（make, ninja）,
+分布式编译（distcc, icecc）,
+前向声明替代包含头文件,
+使用编译缓存（ccache)</p></div> <footer class="page-edit"><!----> <div class="last-updated"><span class="prefix">Last Updated:</span> <span class="time">3/10/2026, 6:08:48 PM</span></div></footer> <div class="page-nav"><p class="inner"><span class="prev">
+      ←
+      <a href="/base/user-mode-vs-kernel-mode.html" class="prev">
+        解释一下用户态和内核态
+      </a></span> <span class="next"><a href="/base/hard-link-vs-soft-link.html">
+        硬链接与软链接的区别？
+      </a>
+      →
+    </span></p></div>  <div class="comments-wrapper" data-v-558649bb><div class="comments-header" data-v-558649bb><h3 class="comments-title" data-v-558649bb>评论</h3> <!----></div> <div class="comments-loading" data-v-558649bb><p data-v-558649bb>验证登录状态...</p></div> <!----> <!----> <!----></div></main> <aside class="page-sidebar"> <div class="page-side-toolbar"><div class="option-box"><img src="/images/system/toggle.png" width="30px" alt="侧边栏" class="nozoom"> <span class="show-txt">侧边栏</span></div> <div class="option-box"><img src="/images/system/dark.svg" width="30px" alt="夜间模式" class="nozoom"> <span class="show-txt">夜间</span></div> <div class="option-box"><a href="https://jianli.kamacoder.com/" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/2025-08-14kamajianli.jpg" width="25px" alt="卡码简历" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码简历</span></a></div> <div class="option-box"><a href="https://programmercarl.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/代码随想录.jpg" width="25px" alt="代码随想录" class="nozoom"> <span class="show-txt" style="margin-top: 5px">代码随想录</span></a></div> <div class="option-box"><a href="https://toudi.kamacoder.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/卡码投递表.jpg" width="25px" alt="卡码投递表" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码投递表🔥</span></a></div> <div class="option-box"><img src="/images/system/实习校招202503.png" width="25px" alt="2026实习校招群" class="nozoom"> <span class="show-txt">2026群</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">添加客服微信</span> <img src="/assets/img/26校招.5e9d30da.jpg" height="180px" alt="2026实习校招客服微信" style="margin: 10px">
+            PS：通过微信后，请发送<b>姓名-学校-年级-2026实习/校招</b></div></div></div></div> <div class="option-box"><img src="/images/system/red-heart.png" width="25px" alt="支持卡码笔记" class="nozoom"> <span class="show-txt">支持卡码笔记</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">鼓励/支持/赞赏Carl</span> <img height="180px" src="/assets/img/网站赞赏.69fb25a5.jpg" alt="卡码笔记赞赏码" style="margin: 5px"> <br>1.
+            如果感觉本站对你很有帮助，也可以请Carl喝杯奶茶，金额大小不重要，心意已经收下
+            <br>2. 希望大家都能梦想成真，有好的前程，加油💪
+          </div></div></div></div></div>  </aside></div><div class="global-ui"><!----></div></div>
+    <script src="/assets/js/app.9998fd5e.js" defer></script><script src="/assets/js/2.a7b01108.js" defer></script><script src="/assets/js/1.86f1b283.js" defer></script><script src="/assets/js/83.2f31138d.js" defer></script>
+  </body>
+</html>

@@ -76,7 +76,7 @@ class IsolatedGardenTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         (self.root / "wiki").mkdir()
-        (self.root / "sources").mkdir()
+        (self.root / "resources").mkdir()
         garden = patch.object(sync_garden, "GARDEN_ROOT", self.root)
         garden.start()
         self.addCleanup(garden.stop)
@@ -180,7 +180,7 @@ class CleanupRegressionTests(IsolatedGardenTests):
 class ManifestScopeTests(IsolatedGardenTests):
     def test_manifest_rejects_noncanonical_paths_without_normalizing(self):
         for relative in (
-            "wiki", "sources", "../wiki/a.md", "/wiki/a.md", "wiki/../sources/a.md",
+            "wiki", "resources", "../wiki/a.md", "/wiki/a.md", "wiki/../resources/a.md",
             "wiki/./a.md", "wiki//a.md", "wiki/a.md/", "wiki\\a.md",
             "wiki/%2e%2e/a.md", "wiki/a%2fb.md", "wiki/a%5Cb.md", "other/a.md",
         ):
@@ -193,7 +193,7 @@ class ManifestScopeTests(IsolatedGardenTests):
     def test_cleanup_requires_canonical_exact_source_not_a_root_or_destination(self):
         destination = "wiki/sub/b.md"
         for suffix in (
-            "", "/wiki", "/sources", "/wiki/../sources/a.md", "/wiki//a.md",
+            "", "/wiki", "/resources", "/wiki/../resources/a.md", "/wiki//a.md",
             "/wiki/%2e%2e/a.md", "/wiki/a%2Fb.md", "/wiki/a%5Cb.md",
             "/wiki/a%252fb.md", "/wiki/sub", "/wiki/sub/b.md",
         ):
@@ -206,7 +206,7 @@ class ManifestScopeTests(IsolatedGardenTests):
     def test_cleanup_source_mapping_must_match_the_target_exactly(self):
         uri = sync_garden.uri_for("wiki/a.md")
         files = {"wiki/b.md": metadata("wiki/b.md", status="pending", cleanup_uris=[uri],
-                                       cleanup_sources={uri: "sources/a.md"})}
+                                       cleanup_sources={uri: "resources/a.md"})}
         with self.assertRaises(ValueError):
             sync_garden.normalize_manifest({"version": 2, "files": files})
 
@@ -698,8 +698,8 @@ class RestartAndRenameTests(IsolatedGardenTests):
             return {"task_id": "replacement-task"}
 
     def test_upload_intent_retains_all_cleanup_provenance_before_submission(self):
-        prior = [sync_garden.uri_for("wiki/prior.md"), sync_garden.uri_for("sources/prior.md")]
-        sources = dict(zip(prior, ("wiki/prior.md", "sources/prior.md")))
+        prior = [sync_garden.uri_for("wiki/prior.md"), sync_garden.uri_for("resources/prior.md")]
+        sources = dict(zip(prior, ("wiki/prior.md", "resources/prior.md")))
         attempts = {uri: "semantic recovery required" for uri in prior}
         for action in ("modify", "move"):
             with self.subTest(action=action):
@@ -947,7 +947,7 @@ class SyncEntrypointTests(IsolatedGardenTests):
 
     def test_completed_v2_entries_remain_noop_without_cleanup_or_http(self):
         files = {}
-        for relative in ("wiki/a.md", "wiki/b.md", "sources/a.md", "sources/b.md"):
+        for relative in ("wiki/a.md", "wiki/b.md", "resources/a.md", "resources/b.md"):
             (self.root / relative).write_bytes(b"same")
             files[relative] = metadata(relative, status="completed")
         state = self.root / "manifest.json"

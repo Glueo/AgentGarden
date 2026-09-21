@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>TIME_WAIT状态的作用？｜高频面试题｜计算机网络高频面试题｜TCP四次挥手、2MSL、主动关闭方 | 卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文</title>
+    <meta name="generator" content="VuePress 1.9.10">
+    <link rel="icon" href="https://file1.kamacoder.com/i/web/2025-08-14kamabij.jpg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script>
+      var _hmt = _hmt || [];
+      (function() {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?2ea20ae8da307f7b54137ae9b4fc95b0";
+        var s = document.getElementsByTagName("script")[0]; 
+        s.parentNode.insertBefore(hm, s);
+      })();
+       // 统计每个页面的UV、PV，核心：监听 VuePress 路由变化，主动上报页面访问
+      document.addEventListener('vuepress:routeChanged', () => {
+        if (window._hmt) {
+          _hmt.push(['_trackPageview', window.location.pathname + window.location.hash]);
+        }
+      });
+    </script>
+    <meta name="description" content="本文详解TCP四次挥手后主动关闭方进入的TIME_WAIT状态，这是计算机网络面试高频考点。核心作用是确保最后一个ACK可靠到达、让旧连接数据包在网络中消逝以避免新连接误接收，并提供足够时间清理资源。详细解释了2MSL（通常60秒）的等待原因、状态触发时机，并分析了TIME_WAIT过多导致端口耗尽等问题的解决方案，如调整tcp_tw_reuse参数、使用连接池等，适合准备大厂面试的开发者。">
+    <meta property="article:modified_time" content="2026-03-10T10:08:48.000Z">
+    <meta property="og:site_name" content="卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文">
+    <meta property="og:title" content="TIME_WAIT状态的作用？｜高频面试题｜计算机网络高频面试题｜TCP四次挥手、2MSL、主动关闭方">
+    <meta property="og:description" content="本文详解TCP四次挥手后主动关闭方进入的TIME_WAIT状态，这是计算机网络面试高频考点。核心作用是确保最后一个ACK可靠到达、让旧连接数据包在网络中消逝以避免新连接误接收，并提供足够时间清理资源。详细解释了2MSL（通常60秒）的等待原因、状态触发时机，并分析了TIME_WAIT过多导致端口耗尽等问题的解决方案，如调整tcp_tw_reuse参数、使用连接池等，适合准备大厂面试的开发者。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="/base/time-wait-state.html">
+    <meta name="twitter:title" content="TIME_WAIT状态的作用？｜高频面试题｜计算机网络高频面试题｜TCP四次挥手、2MSL、主动关闭方">
+    <meta name="twitter:description" content="本文详解TCP四次挥手后主动关闭方进入的TIME_WAIT状态，这是计算机网络面试高频考点。核心作用是确保最后一个ACK可靠到达、让旧连接数据包在网络中消逝以避免新连接误接收，并提供足够时间清理资源。详细解释了2MSL（通常60秒）的等待原因、状态触发时机，并分析了TIME_WAIT过多导致端口耗尽等问题的解决方案，如调整tcp_tw_reuse参数、使用连接池等，适合准备大厂面试的开发者。">
+    <meta name="twitter:url" content="/base/time-wait-state.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:label2" content="Filed under">
+    <meta name="twitter:data2" content="大厂面试题, 计算机网络, 高频考点, TCP, 面试题">
+    <meta property="article:tag" content="大厂面试题">
+    <meta name="keywords" content="TIME_WAIT状态,TCP四次挥手,2MSL,主动关闭方,TIME_WAIT作用是什么,TIME_WAIT太多怎么办,TCP连接关闭,网络面试题,大厂面试题,高频面试题,tcp_tw_reuse,SO_REUSEADDR,LAST_ACK,FIN重传">
+    <meta name="tags" content="大厂面试题,计算机网络,高频考点,TCP,面试题">
+    <meta name="theme-color" content="#3eaf7c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
+    <link rel="preload" href="/assets/css/0.styles.88f5c8c7.css" as="style"><link rel="preload" href="/assets/js/app.9998fd5e.js" as="script"><link rel="preload" href="/assets/js/2.a7b01108.js" as="script"><link rel="preload" href="/assets/js/1.86f1b283.js" as="script"><link rel="preload" href="/assets/js/103.a26e0f31.js" as="script">
+    <link rel="stylesheet" href="/assets/css/0.styles.88f5c8c7.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container sidebar-open"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/" class="home-link router-link-active"><!----> <span class="site-name">卡码笔记-最强八股文</span></a> <div class="links"><!----> <nav class="nav-links can-hide"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav>  <ul class="sidebar-links"><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>操作系统</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading open"><span>网络</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>基础概念</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading open"><span>TCP 深入</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/base/tcp-three-way-handshake.html" class="sidebar-link">TCP三次握手的详细流程及核心目的？</a></li><li><a href="/base/three-way-handshake-why.html" class="sidebar-link">三次握手的过程？以及为什么是三次而不是四次和两次</a></li><li><a href="/base/tcp-four-way-handshake.html" class="sidebar-link">四次挥手的过程是怎样的？为什么是四次而不是三次或五次？</a></li><li><a href="/base/time-wait-state.html" aria-current="page" class="active sidebar-link">TIME_WAIT状态的作用？</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/base/time-wait-state.html#简要回答" class="sidebar-link">简要回答</a></li><li class="sidebar-sub-header"><a href="/base/time-wait-state.html#详细回答" class="sidebar-link">详细回答</a></li><li class="sidebar-sub-header"><a href="/base/time-wait-state.html#代码示例" class="sidebar-link">代码示例</a></li><li class="sidebar-sub-header"><a href="/base/time-wait-state.html#知识拓展" class="sidebar-link">知识拓展</a></li></ul></li><li><a href="/base/tcp-reliability.html" class="sidebar-link">TCP连接如何确保可靠性？</a></li><li><a href="/base/congestion-control.html" class="sidebar-link">能说说拥塞控制是怎样实现的吗？</a></li><li><a href="/base/tcp-keepalive-vs-http-keep-alive.html" class="sidebar-link">TCPKeepalive和HTTPKeep-Alive的区别？</a></li></ul></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>HTTP 进阶</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>安全与缓存</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>综合应用</span> <span class="arrow right"></span></p> <!----></section></li></ul></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>数据库</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>计算机组成原理</span> <span class="arrow right"></span></p> <!----></section></li></ul> </aside> <main class="page"> <div class="page-meta-host" style="display:none;"></div> <!----> <div class="theme-default-content content__default"><h1 id="time-wait状态的作用"><a href="#time-wait状态的作用" class="header-anchor">#</a> TIME_WAIT状态的作用？</h1> <h2 id="简要回答"><a href="#简要回答" class="header-anchor">#</a> 简要回答</h2> <p>TIME_WAIT状态是TCP四次挥手后，<strong>主动关闭方保持的2MSL</strong>（最大报文段寿命的两倍）等待状态，<strong>核心作用</strong>：</p> <ol><li><p><strong>确保最后一个ACK可靠到达</strong>：防止被动关闭方重传FIN</p></li> <li><p>让旧连接的数据包在网络中消逝：<strong>避免被新连接误接收</strong></p></li> <li><p><strong>提供足够时间</strong>让TCP实现清理资源：安全关闭连接</p></li></ol> <h2 id="详细回答"><a href="#详细回答" class="header-anchor">#</a> 详细回答</h2> <p>TIME_WAIT状态详解：</p> <ol><li>触发时机</li></ol> <p>主动关闭方<strong>在发送最后一个ACK后进入TIME_WAIT状态</strong></p> <p>持续时间：2MSL（Maximum Segment Lifetime），<strong>通常为60秒</strong>（<strong>Linux默认</strong>）</p> <p>位置：<strong>TCP四次挥手的最后一步</strong></p> <ol start="2"><li>四次挥手过程与TIME_WAIT</li></ol> <div class="language-text line-numbers-mode"><pre class="language-text"><code>主动关闭方 (Client)         被动关闭方 (Server)
+      FIN -------------------&gt;   (Client进入FIN_WAIT_1)
+      &amp;lt;------------------- ACK   (Server进入CLOSE_WAIT, Client进入FIN_WAIT_2)
+      &amp;lt;------------------- FIN   (Server进入LAST_ACK)
+      ACK -------------------&gt;   (Server进入CLOSED, Client进入TIME_WAIT)
+      (等待2MSL)                 (Client进入CLOSED)
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br></div></div><ol start="3"><li>TIME_WAIT的核心作用</li></ol> <p>作用一：<strong>确保最后一个ACK可靠到达</strong></p> <p>如果<strong>最后一个ACK丢失，被动关闭方会重传FIN</strong></p> <p>TIME_WAIT期间可以<strong>接收这个重传的FIN并重发ACK</strong></p> <p>避免被动关闭方<strong>一直处于LAST_ACK状态</strong></p> <p>作用二：<strong>让旧连接的数据包从网络中消失</strong></p> <p>网络中可能还有<strong>旧连接的延迟数据包</strong></p> <p><strong>2MSL时间确保这些数据包都超过最大寿命</strong></p> <p><strong>防止</strong>这些旧数据包被新建立的相同四元组连接<strong>误接收</strong></p> <p>作用三：<strong>提供TCP实现清理时间</strong></p> <p>确保<strong>操作系统有足够时间清理连接资源</strong></p> <p><strong>释放端口、内存等资源</strong></p> <p>更新连接状态表</p> <ol start="4"><li>为什么是2MSL而不是1MSL？</li></ol> <p>1MSL：确保<strong>最后一个ACK能到达被动关闭方</strong></p> <p>另1MSL：<strong>确保被动关闭方的重传FIN</strong>（如果需要）<strong>能到达</strong></p> <p>总2MSL：<strong>确保任何一方的重传报文都能被处理</strong></p> <h2 id="代码示例"><a href="#代码示例" class="header-anchor">#</a> 代码示例</h2> <div class="language-c++ line-numbers-mode"><pre class="language-text"><code>class TCPTimeWaitDemo {
+private:
+    static constexpr int PORT = 8888;
+    static constexpr int MSL = 30; // 简化的MSL，单位秒
+
+public:
+    void demonstrate_time_wait() {
+        std::cout &lt;&lt; &quot;=== TCP TIME_WAIT 状态演示 ===&quot; &lt;&lt; std::endl;
+
+        // 服务器线程
+        std::thread server_thread([this]() {
+            run_server();
+        });
+
+        // 等待服务器启动
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        // 客户端线程 - 主动关闭连接
+        std::thread client_thread([this]() {
+            run_client(true); // true表示主动关闭
+        });
+
+        client_thread.join();
+        server_thread.join();
+
+        std::cout &lt;&lt; &quot;\n=== 立即重用相同端口演示 ===&quot; &lt;&lt; std::endl;
+        std::cout &lt;&lt; &quot;注意：这可能会失败，因为TIME_WAIT中&quot; &lt;&lt; std::endl;
+
+        // 尝试立即重用端口
+        try_reuse_port();
+    }
+
+private:
+    void run_server() {
+        int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (server_fd &lt; 0) {
+            std::cerr &lt;&lt; &quot;服务器：创建socket失败&quot; &lt;&lt; std::endl;
+            return;
+        }
+
+        // 设置SO_REUSEADDR
+        int reuse = 1;
+        if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &amp;reuse, sizeof(reuse)) &lt; 0) {
+            std::cerr &lt;&lt; &quot;服务器：设置SO_REUSEADDR失败&quot; &lt;&lt; std::endl;
+        }
+
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(PORT);
+        addr.sin_addr.s_addr = INADDR_ANY;
+
+        if (bind(server_fd, (sockaddr*)&amp;addr, sizeof(addr)) &lt; 0) {
+            std::cerr &lt;&lt; &quot;服务器：bind失败&quot; &lt;&lt; std::endl;
+            close(server_fd);
+            return;
+        }
+
+        if (listen(server_fd, 5) &lt; 0) {
+            std::cerr &lt;&lt; &quot;服务器：listen失败&quot; &lt;&lt; std::endl;
+            close(server_fd);
+            return;
+        }
+
+        std::cout &lt;&lt; &quot;服务器：监听端口 &quot; &lt;&lt; PORT &lt;&lt; std::endl;
+
+        sockaddr_in client_addr{};
+        socklen_t client_len = sizeof(client_addr);
+        int client_fd = accept(server_fd, (sockaddr*)&amp;client_addr, &amp;client_len);
+
+        if (client_fd &lt; 0) {
+            std::cerr &lt;&lt; &quot;服务器：accept失败&quot; &lt;&lt; std::endl;
+            close(server_fd);
+            return;
+        }
+
+        std::cout &lt;&lt; &quot;服务器：客户端连接建立&quot; &lt;&lt; std::endl;
+
+        // 接收数据
+        char buffer[1024];
+        ssize_t bytes = recv(client_fd, buffer, sizeof(buffer), 0);
+        if (bytes &gt; 0) {
+            std::cout &lt;&lt; &quot;服务器：收到消息: &quot; &lt;&lt; std::string(buffer, bytes) &lt;&lt; std::endl;
+        }
+
+        // 等待客户端关闭（被动关闭）
+        std::cout &lt;&lt; &quot;服务器：等待客户端关闭连接...&quot; &lt;&lt; std::endl;
+
+        // 接收FIN
+        bytes = recv(client_fd, buffer, sizeof(buffer), 0);
+        if (bytes == 0) {
+            std::cout &lt;&lt; &quot;服务器：收到FIN，客户端关闭连接&quot; &lt;&lt; std::endl;
+        }
+
+        // 发送ACK
+        std::cout &lt;&lt; &quot;服务器：发送ACK&quot; &lt;&lt; std::endl;
+
+        // 发送自己的FIN
+        std::cout &lt;&lt; &quot;服务器：发送FIN，进入LAST_ACK状态&quot; &lt;&lt; std::endl;
+
+        // 等待客户端的ACK
+        std::cout &lt;&lt; &quot;服务器：等待最后一个ACK...&quot; &lt;&lt; std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        std::cout &lt;&lt; &quot;服务器：收到ACK，连接完全关闭&quot; &lt;&lt; std::endl;
+
+        close(client_fd);
+        close(server_fd);
+    }
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br><span class="line-number">17</span><br><span class="line-number">18</span><br><span class="line-number">19</span><br><span class="line-number">20</span><br><span class="line-number">21</span><br><span class="line-number">22</span><br><span class="line-number">23</span><br><span class="line-number">24</span><br><span class="line-number">25</span><br><span class="line-number">26</span><br><span class="line-number">27</span><br><span class="line-number">28</span><br><span class="line-number">29</span><br><span class="line-number">30</span><br><span class="line-number">31</span><br><span class="line-number">32</span><br><span class="line-number">33</span><br><span class="line-number">34</span><br><span class="line-number">35</span><br><span class="line-number">36</span><br><span class="line-number">37</span><br><span class="line-number">38</span><br><span class="line-number">39</span><br><span class="line-number">40</span><br><span class="line-number">41</span><br><span class="line-number">42</span><br><span class="line-number">43</span><br><span class="line-number">44</span><br><span class="line-number">45</span><br><span class="line-number">46</span><br><span class="line-number">47</span><br><span class="line-number">48</span><br><span class="line-number">49</span><br><span class="line-number">50</span><br><span class="line-number">51</span><br><span class="line-number">52</span><br><span class="line-number">53</span><br><span class="line-number">54</span><br><span class="line-number">55</span><br><span class="line-number">56</span><br><span class="line-number">57</span><br><span class="line-number">58</span><br><span class="line-number">59</span><br><span class="line-number">60</span><br><span class="line-number">61</span><br><span class="line-number">62</span><br><span class="line-number">63</span><br><span class="line-number">64</span><br><span class="line-number">65</span><br><span class="line-number">66</span><br><span class="line-number">67</span><br><span class="line-number">68</span><br><span class="line-number">69</span><br><span class="line-number">70</span><br><span class="line-number">71</span><br><span class="line-number">72</span><br><span class="line-number">73</span><br><span class="line-number">74</span><br><span class="line-number">75</span><br><span class="line-number">76</span><br><span class="line-number">77</span><br><span class="line-number">78</span><br><span class="line-number">79</span><br><span class="line-number">80</span><br><span class="line-number">81</span><br><span class="line-number">82</span><br><span class="line-number">83</span><br><span class="line-number">84</span><br><span class="line-number">85</span><br><span class="line-number">86</span><br><span class="line-number">87</span><br><span class="line-number">88</span><br><span class="line-number">89</span><br><span class="line-number">90</span><br><span class="line-number">91</span><br><span class="line-number">92</span><br><span class="line-number">93</span><br><span class="line-number">94</span><br><span class="line-number">95</span><br><span class="line-number">96</span><br><span class="line-number">97</span><br><span class="line-number">98</span><br><span class="line-number">99</span><br><span class="line-number">100</span><br><span class="line-number">101</span><br><span class="line-number">102</span><br><span class="line-number">103</span><br><span class="line-number">104</span><br><span class="line-number">105</span><br><span class="line-number">106</span><br><span class="line-number">107</span><br><span class="line-number">108</span><br></div></div><h2 id="知识拓展"><a href="#知识拓展" class="header-anchor">#</a> 知识拓展</h2> <ol><li>TIME_WAIT相关参数优化</li></ol> <div class="language-linux line-numbers-mode"><pre class="language-text"><code># Linux系统参数
+
+net.ipv4.tcp_tw_reuse = 1      # 允许TIME_WAIT sockets重用
+
+net.ipv4.tcp_tw_recycle = 0    # 不建议开启（已废弃）
+
+net.ipv4.tcp_fin_timeout = 60  # FIN_WAIT_2超时时间
+
+net.ipv4.tcp_max_tw_buckets = 262144  # TIME_WAIT最大数量
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br></div></div><ol start="2"><li>减少TIME_WAIT的影响</li></ol> <p><strong>使用SO_REUSEADDR</strong>：允许重用TIME_WAIT状态的端口</p> <p><strong>长连接代替短连接</strong>：减少连接建立/关闭次数</p> <p><strong>连接池</strong>：复用连接而不是创建新连接</p> <p><strong>调整TCP参数</strong>：减少等待时间</p> <ol start="3"><li>不同操作系统的TIME_WAIT处理</li></ol> <p>Linux：默认60秒，可调整参数</p> <p>Windows：默认240秒（4分钟）</p> <p>BSD：默认60秒</p> <p>Solaris：默认60秒</p> <ul><li>使用场景</li></ul> <p><strong>高并发服务器</strong>：Web服务器、API网关需要处理大量短连接</p> <p><strong>负载均衡器</strong>：大量后端连接的管理</p> <p><strong>代理服务器</strong>：频繁建立和关闭连接</p> <p><strong>压力测试</strong>：大量并发连接测试</p> <p><strong>连接池设计</strong>：需要了解连接生命周期</p> <p><strong>网络故障排查</strong>：分析连接关闭问题</p> <ul><li>知识图解</li></ul> <p><img src="https://file1.kamacoder.com/i/bagu/20260130.png" alt="image"></p> <ul><li>面试官很能追问</li></ul> <p>Q1：TIME_WAIT状态太多会有什么问题？</p> <p>A1：
+端口耗尽：无法创建新连接（最多约28000个临时端口）</p> <p>内存占用：每个TIME_WAIT连接占用内核内存</p> <p>性能下降：连接建立延迟增加</p> <p>解决方案：</p> <p>调整net.ipv4.tcp_max_tw_buckets,
+启用net.ipv4.tcp_tw_reuse,
+使用连接池,
+增加可用端口范围</p> <p>Q2：tcp_tw_reuse和tcp_tw_recycle的区别？</p> <p>A2：
+tcp_tw_reuse：允许将TIME_WAIT连接用于新的出向连接</p> <p>条件：时间戳启用，且时间戳大于前一个连接
+相对安全，推荐开启</p> <p>tcp_tw_recycle：快速回收TIME_WAIT连接（已废弃）</p> <p>基于时间戳的PAWS机制</p> <p>在NAT环境下有问题，Linux 4.12+已移除
+不建议使用</p> <p>Q3：为什么客户端和服务端都有TIME_WAIT？
+A3：
+只有主动关闭方会进入TIME_WAIT状态</p> <p>如果服务器主动关闭连接，服务器端会有TIME_WAIT</p> <p>常见场景：
+HTTP/1.0：服务器主动关闭（服务器有TIME_WAIT）</p> <p>HTTP/1.1 Keep-Alive：客户端主动关闭（客户端有TIME_WAIT）</p> <p>数据库连接：通常客户端主动关闭</p></div> <footer class="page-edit"><!----> <div class="last-updated"><span class="prefix">Last Updated:</span> <span class="time">3/10/2026, 6:08:48 PM</span></div></footer> <div class="page-nav"><p class="inner"><span class="prev">
+      ←
+      <a href="/base/tcp-four-way-handshake.html" class="prev">
+        四次挥手的过程是怎样的？为什么是四次而不是三次或五次？
+      </a></span> <span class="next"><a href="/base/tcp-reliability.html">
+        TCP连接如何确保可靠性？
+      </a>
+      →
+    </span></p></div>  <div class="comments-wrapper" data-v-558649bb><div class="comments-header" data-v-558649bb><h3 class="comments-title" data-v-558649bb>评论</h3> <!----></div> <div class="comments-loading" data-v-558649bb><p data-v-558649bb>验证登录状态...</p></div> <!----> <!----> <!----></div></main> <aside class="page-sidebar"> <div class="page-side-toolbar"><div class="option-box"><img src="/images/system/toggle.png" width="30px" alt="侧边栏" class="nozoom"> <span class="show-txt">侧边栏</span></div> <div class="option-box"><img src="/images/system/dark.svg" width="30px" alt="夜间模式" class="nozoom"> <span class="show-txt">夜间</span></div> <div class="option-box"><a href="https://jianli.kamacoder.com/" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/2025-08-14kamajianli.jpg" width="25px" alt="卡码简历" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码简历</span></a></div> <div class="option-box"><a href="https://programmercarl.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/代码随想录.jpg" width="25px" alt="代码随想录" class="nozoom"> <span class="show-txt" style="margin-top: 5px">代码随想录</span></a></div> <div class="option-box"><a href="https://toudi.kamacoder.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/卡码投递表.jpg" width="25px" alt="卡码投递表" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码投递表🔥</span></a></div> <div class="option-box"><img src="/images/system/实习校招202503.png" width="25px" alt="2026实习校招群" class="nozoom"> <span class="show-txt">2026群</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">添加客服微信</span> <img src="/assets/img/26校招.5e9d30da.jpg" height="180px" alt="2026实习校招客服微信" style="margin: 10px">
+            PS：通过微信后，请发送<b>姓名-学校-年级-2026实习/校招</b></div></div></div></div> <div class="option-box"><img src="/images/system/red-heart.png" width="25px" alt="支持卡码笔记" class="nozoom"> <span class="show-txt">支持卡码笔记</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">鼓励/支持/赞赏Carl</span> <img height="180px" src="/assets/img/网站赞赏.69fb25a5.jpg" alt="卡码笔记赞赏码" style="margin: 5px"> <br>1.
+            如果感觉本站对你很有帮助，也可以请Carl喝杯奶茶，金额大小不重要，心意已经收下
+            <br>2. 希望大家都能梦想成真，有好的前程，加油💪
+          </div></div></div></div></div>  </aside></div><div class="global-ui"><!----></div></div>
+    <script src="/assets/js/app.9998fd5e.js" defer></script><script src="/assets/js/2.a7b01108.js" defer></script><script src="/assets/js/1.86f1b283.js" defer></script><script src="/assets/js/103.a26e0f31.js" defer></script>
+  </body>
+</html>

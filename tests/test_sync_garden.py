@@ -21,7 +21,7 @@ class IsolatedSyncTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
         (root / "wiki").mkdir()
-        (root / "sources").mkdir()
+        (root / "resources").mkdir()
         garden = patch.object(sync_garden, "GARDEN_ROOT", root)
         garden.start()
         self.addCleanup(garden.stop)
@@ -96,14 +96,24 @@ class SyncPlanTests(IsolatedSyncTests):
         self.assertEqual(sync_garden.sync_exit_code({"wiki/a.md": {"status": "completed"}}), 0)
         self.assertEqual(sync_garden.sync_exit_code({"wiki/a.md": {"status": "failed"}}), 1)
 
-    def test_sync_scope_excludes_runtime_owned_skills(self):
-        self.assertEqual(sync_garden.SYNC_ROOTS, ("wiki", "sources"))
+    def test_sync_scope_is_wiki_and_raw_resources(self):
+        self.assertEqual(sync_garden.SYNC_ROOTS, ("wiki", "resources"))
+
+    def test_scan_includes_resource_html_and_ignores_legacy_sources(self):
+        (sync_garden.GARDEN_ROOT / "resources/page.html").write_bytes(b"<!doctype html><title>source</title>")
+        (sync_garden.GARDEN_ROOT / "sources").mkdir()
+        (sync_garden.GARDEN_ROOT / "sources/derived.md").write_text("processed", encoding="utf-8")
+
+        scanned = sync_garden.scan()
+
+        self.assertIn("resources/page.html", scanned)
+        self.assertNotIn("sources/derived.md", scanned)
 
     def test_scan_rejects_symlink_even_when_it_points_to_a_file(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "wiki").mkdir()
-            (root / "sources").mkdir()
+            (root / "resources").mkdir()
             outside = root / "outside.md"
             outside.write_text("outside", encoding="utf-8")
             (root / "wiki/link.md").symlink_to(outside)
@@ -255,6 +265,218 @@ class SyncPlanTests(IsolatedSyncTests):
         local = b"---\nid: a\n---\n\n# Title\n\nBody\n"
         remote = b"\n# Title\n\nStale\n"
         self.assertFalse(sync_garden.remote_content_matches(local, remote, text=True))
+
+    def test_markdown_verification_tolerates_trailing_newline_normalization(self):
+        local = b"# Title\n\nBody\n"
+        remote = b"# Title\n\nBody"
+        self.assertTrue(sync_garden.remote_content_matches(local, remote, text=True))
+        self.assertTrue(sync_garden.remote_content_matches(remote, local, text=True))
+
+    def test_parsed_html_stat_without_readable_child_is_not_verification(self):
+        class ParsedClient:
+            def __init__(self):
+                self.stat_calls = 0
+
+            def download_bytes(self, uri):
+                return None
+
+            def ls(self, uri, **kwargs):
+                raise FileNotFoundError(uri)
+
+            def stat(self, uri):
+                self.stat_calls += 1
+                return {"uri": uri, "name": "page.html", "isDir": True}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "resources").mkdir()
+            (root / "resources/page.html").write_bytes(b"<!doctype html><title>x</title>")
+            original = sync_garden.GARDEN_ROOT
+            sync_garden.GARDEN_ROOT = root
+            try:
+                entry = {
+                    "sha256": sync_garden.hash_bytes(b"<!doctype html><title>x</title>"),
+                    "uri": sync_garden.uri_for("resources/page.html"),
+                    "text": True,
+                }
+                client = ParsedClient()
+                ok = sync_garden.verified_content(
+                    client, "resources/page.html", entry,
+                    lambda rel: (root / rel).read_bytes(),
+                )
+            finally:
+                sync_garden.GARDEN_ROOT = original
+        self.assertFalse(ok)
+        self.assertEqual(client.stat_calls, 1)
+
+    def test_parsed_html_child_markdown_verifies_resource_tree_ingestion(self):
+        local = (
+            b"<!doctype html><html><head><title>Fresh page</title></head>"
+            b"<body><nav>Discarded navigation</nav><main><h1>Fresh page</h1>"
+            b"<p>Fresh body with enough substantive content for extraction.</p>"
+            b"</main></body></html>"
+        )
+        from openviking.parse.parsers.html import HTMLParser as OpenVikingHTMLParser
+        parsed_child = OpenVikingHTMLParser()._html_to_markdown(
+            local.decode("utf-8"), base_url=""
+        ).encode("utf-8")
+
+        class ParsedClient:
+            def download_bytes(self, uri):
+                if uri.endswith("/page.md"):
+                    return parsed_child
+                raise IsADirectoryError(uri)
+
+            def ls(self, uri, **kwargs):
+                return [{
+                    "name": "page.md",
+                    "isDir": False,
+                    "uri": uri + "/page.md",
+                }]
+
+            def stat(self, uri):
+                return {"uri": uri, "name": "page.html", "isDir": True}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "resources").mkdir()
+            (root / "resources/page.html").write_bytes(local)
+            entry = {
+                "sha256": sync_garden.hash_bytes(local),
+                "uri": sync_garden.uri_for("resources/page.html"),
+                "text": True,
+            }
+            self.assertTrue(sync_garden.verified_content(
+                ParsedClient(), "resources/page.html", entry,
+                lambda rel: (root / rel).read_bytes(),
+            ))
+
+    def test_parsed_html_stale_child_does_not_verify_current_source(self):
+        class ParsedClient:
+            def __init__(self, child):
+                self.child = child
+
+            def download_bytes(self, uri):
+                if uri.endswith("/page.md"):
+                    return self.child
+                raise IsADirectoryError(uri)
+
+            def ls(self, uri, **kwargs):
+                return [{"name": "page.md", "isDir": False, "uri": uri + "/page.md"}]
+
+            def stat(self, uri):
+                return {"uri": uri, "name": "page.html", "isDir": True}
+
+        local = b"<!doctype html><title>Fresh page</title><body><p>Fresh body changed substantially</p></body>"
+        entry = {
+            "sha256": sync_garden.hash_bytes(local),
+            "uri": sync_garden.uri_for("resources/page.html"),
+            "text": True,
+        }
+        for stale in (b"# Old page\n\nOld body\n", b"# Fresh page\n", b"# Fresh page\n\nOld body\n"):
+            with self.subTest(stale=stale):
+                self.assertFalse(sync_garden.verified_content(
+                    ParsedClient(stale), "resources/page.html", entry, lambda rel: local,
+                ))
+
+    def test_unreadable_regular_or_tree_resource_fails_closed(self):
+        local = b"<!doctype html><title>Fresh page</title><body>Fresh body</body>"
+        entry = {
+            "sha256": sync_garden.hash_bytes(local),
+            "uri": sync_garden.uri_for("resources/page.html"),
+            "text": True,
+        }
+
+        class UnreadableRegular:
+            def download_bytes(self, uri):
+                raise PermissionError("denied")
+
+            def ls(self, uri, **kwargs):
+                raise PermissionError("denied")
+
+            def stat(self, uri):
+                return {"uri": uri, "name": "page.html", "isDir": False}
+
+        class UnreadableTree:
+            def download_bytes(self, uri):
+                if uri.endswith("/page.md"):
+                    raise PermissionError("denied")
+                raise IsADirectoryError(uri)
+
+            def ls(self, uri, **kwargs):
+                return [{"name": "page.md", "isDir": False, "uri": uri + "/page.md"}]
+
+            def stat(self, uri):
+                return {"uri": uri, "name": "page.html", "isDir": True}
+
+        for client in (UnreadableRegular(), UnreadableTree()):
+            with self.subTest(client=type(client).__name__):
+                self.assertFalse(sync_garden.verified_content(
+                    client, "resources/page.html", entry, lambda rel: local,
+                ))
+
+    def test_semantic_tree_fallback_is_restricted_to_html(self):
+        local = b"Fresh page Fresh body"
+        uri = sync_garden.uri_for("resources/page.txt")
+
+        class ParsedClient:
+            def download_bytes(self, target):
+                if target.endswith("/page.md"):
+                    return b"# Fresh page\n\nFresh body\n"
+                raise IsADirectoryError(target)
+
+            def ls(self, target, **kwargs):
+                return [{"name": "page.md", "isDir": False, "uri": target + "/page.md"}]
+
+            def stat(self, target):
+                return {"uri": target, "name": "page.txt", "isDir": True}
+
+        self.assertFalse(sync_garden.verified_content(
+            ParsedClient(), "resources/page.txt",
+            {"sha256": sync_garden.hash_bytes(local), "uri": uri, "text": True},
+            lambda rel: local,
+        ))
+
+    def test_parsed_markdown_tree_still_requires_matching_child_bytes(self):
+        local = b"# Fresh page\n\nFresh body\n"
+        uri = sync_garden.uri_for("wiki/page.md")
+
+        class ParsedClient:
+            def __init__(self, child):
+                self.child = child
+
+            def download_bytes(self, target):
+                if target.endswith("/parsed.md"):
+                    return self.child
+                raise IsADirectoryError(target)
+
+            def ls(self, target, **kwargs):
+                return [{"name": "parsed.md", "isDir": False, "uri": target + "/parsed.md"}]
+
+        entry = {"sha256": sync_garden.hash_bytes(local), "uri": uri, "text": True}
+        self.assertTrue(sync_garden.verified_content(
+            ParsedClient(local), "wiki/page.md", entry, lambda rel: local,
+        ))
+        self.assertFalse(sync_garden.verified_content(
+            ParsedClient(b"# Stale page\n"), "wiki/page.md", entry, lambda rel: local,
+        ))
+
+    def test_direct_binary_readback_requires_exact_bytes(self):
+        local = b"binary\x00payload\n"
+        uri = sync_garden.uri_for("resources/blob.bin")
+
+        class Client:
+            def __init__(self, remote):
+                self.remote = remote
+
+            def download_bytes(self, target):
+                return self.remote
+
+        entry = {"sha256": sync_garden.hash_bytes(local), "uri": uri, "text": False}
+        self.assertTrue(sync_garden.verified_content(Client(local), "resources/blob.bin", entry, lambda rel: local))
+        self.assertFalse(sync_garden.verified_content(
+            Client(local.rstrip()), "resources/blob.bin", entry, lambda rel: local,
+        ))
 
     def test_snapshot_commit_recovers_ambiguous_success_without_retry(self):
         class Snapshot:

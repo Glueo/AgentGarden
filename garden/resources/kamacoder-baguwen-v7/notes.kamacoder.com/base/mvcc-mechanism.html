@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>说一说你了解的MVCC机制？｜大厂面试题｜数据库高频面试题｜MVCC、版本链、Read View、Undo Log | 卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文</title>
+    <meta name="generator" content="VuePress 1.9.10">
+    <link rel="icon" href="https://file1.kamacoder.com/i/web/2025-08-14kamabij.jpg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script>
+      var _hmt = _hmt || [];
+      (function() {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?2ea20ae8da307f7b54137ae9b4fc95b0";
+        var s = document.getElementsByTagName("script")[0]; 
+        s.parentNode.insertBefore(hm, s);
+      })();
+       // 统计每个页面的UV、PV，核心：监听 VuePress 路由变化，主动上报页面访问
+      document.addEventListener('vuepress:routeChanged', () => {
+        if (window._hmt) {
+          _hmt.push(['_trackPageview', window.location.pathname + window.location.hash]);
+        }
+      });
+    </script>
+    <meta name="description" content="MVCC（多版本并发控制）是数据库面试中的高频考点，用于解决高并发下的读写冲突。其核心是通过保存数据多版本（版本链）和读视图（Read View）实现读写并发，无需读操作加锁。本文详解MVCC在InnoDB中的实现原理，包括隐藏列（DB_TRX_ID、DB_ROLL_PTR）、Undo Log存储旧版本、以及Read Committed与Repeatable Read隔离级别下的可见性判断规则，并阐述MVCC与锁的协同关系。">
+    <meta property="article:modified_time" content="2026-03-10T10:08:48.000Z">
+    <meta property="og:site_name" content="卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文">
+    <meta property="og:title" content="说一说你了解的MVCC机制？｜大厂面试题｜数据库高频面试题｜MVCC、版本链、Read View、Undo Log">
+    <meta property="og:description" content="MVCC（多版本并发控制）是数据库面试中的高频考点，用于解决高并发下的读写冲突。其核心是通过保存数据多版本（版本链）和读视图（Read View）实现读写并发，无需读操作加锁。本文详解MVCC在InnoDB中的实现原理，包括隐藏列（DB_TRX_ID、DB_ROLL_PTR）、Undo Log存储旧版本、以及Read Committed与Repeatable Read隔离级别下的可见性判断规则，并阐述MVCC与锁的协同关系。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="/base/mvcc-mechanism.html">
+    <meta name="twitter:title" content="说一说你了解的MVCC机制？｜大厂面试题｜数据库高频面试题｜MVCC、版本链、Read View、Undo Log">
+    <meta name="twitter:description" content="MVCC（多版本并发控制）是数据库面试中的高频考点，用于解决高并发下的读写冲突。其核心是通过保存数据多版本（版本链）和读视图（Read View）实现读写并发，无需读操作加锁。本文详解MVCC在InnoDB中的实现原理，包括隐藏列（DB_TRX_ID、DB_ROLL_PTR）、Undo Log存储旧版本、以及Read Committed与Repeatable Read隔离级别下的可见性判断规则，并阐述MVCC与锁的协同关系。">
+    <meta name="twitter:url" content="/base/mvcc-mechanism.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:label2" content="Filed under">
+    <meta name="twitter:data2" content="大厂面试题, 数据库, 面试题, 高频考点, 并发控制, MVCC">
+    <meta property="article:tag" content="大厂面试题">
+    <meta name="keywords" content="MVCC机制,多版本并发控制,MVCC面试题,MVCC工作原理,版本链,Read View,Undo Log,事务隔离级别,Read Committed,Repeatable Read,数据库并发控制,大厂面试题,高频面试题">
+    <meta name="tags" content="大厂面试题,数据库,面试题,高频考点,并发控制,MVCC">
+    <meta name="theme-color" content="#3eaf7c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
+    <link rel="preload" href="/assets/css/0.styles.88f5c8c7.css" as="style"><link rel="preload" href="/assets/js/app.9998fd5e.js" as="script"><link rel="preload" href="/assets/js/2.a7b01108.js" as="script"><link rel="preload" href="/assets/js/1.86f1b283.js" as="script"><link rel="preload" href="/assets/js/72.a44af0c6.js" as="script">
+    <link rel="stylesheet" href="/assets/css/0.styles.88f5c8c7.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container sidebar-open"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/" class="home-link router-link-active"><!----> <span class="site-name">卡码笔记-最强八股文</span></a> <div class="links"><!----> <nav class="nav-links can-hide"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav>  <ul class="sidebar-links"><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>操作系统</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>网络</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading open"><span>数据库</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>SQL</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>索引</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading open"><span>锁与MVCC</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/base/database-locks.html" class="sidebar-link">什么是数据库中的锁，有哪些类型？</a></li><li><a href="/base/mvcc-mechanism.html" aria-current="page" class="active sidebar-link">说一说你了解的MVCC机制？</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/base/mvcc-mechanism.html#简要回答" class="sidebar-link">简要回答</a></li><li class="sidebar-sub-header"><a href="/base/mvcc-mechanism.html#详细回答" class="sidebar-link">详细回答</a></li><li class="sidebar-sub-header"><a href="/base/mvcc-mechanism.html#知识拓展" class="sidebar-link">知识拓展</a></li></ul></li></ul></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>事务</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>Redis</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>其他</span> <span class="arrow right"></span></p> <!----></section></li></ul></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>计算机组成原理</span> <span class="arrow right"></span></p> <!----></section></li></ul> </aside> <main class="page"> <div class="page-meta-host" style="display:none;"></div> <!----> <div class="theme-default-content content__default"><h1 id="说一说你了解的mvcc机制"><a href="#说一说你了解的mvcc机制" class="header-anchor">#</a> 说一说你了解的MVCC机制？</h1> <h2 id="简要回答"><a href="#简要回答" class="header-anchor">#</a> 简要回答</h2> <h3 id="mvcc的相关概念"><a href="#mvcc的相关概念" class="header-anchor">#</a> MVCC的相关概念</h3> <ul><li>在数据库高并发场景下，传统的锁机制会导致大量的锁等待，严重影响性能。为了解决这个问题，出现了 <strong>MVCC</strong> (<strong>Multi-Version Concurrency Control</strong>，多版本并发控制) 机制。MVCC 的<strong>核心思想</strong>不是通过加锁来阻止读写冲突，而是通过保存数据的多个版本，使得读操作可以读取数据的旧版本，从而实现读写操作的并发执行，提高数据库的吞吐量。</li></ul> <h3 id="mvcc的工作原理"><a href="#mvcc的工作原理" class="header-anchor">#</a> MVCC的工作原理</h3> <ol><li><strong>版本链：</strong> InnoDB数据引擎 在每行数据后添加隐藏列（事务 ID 和回滚指针），将同一行数据的不同版本连接起来形成版本链，旧版本数据存储在 <strong><code>Undo Log</code></strong> 中。</li> <li><strong>读视图 (Read View)：</strong> 事务开始时生成一个 <strong>Read View</strong>，用于记录当前活跃事务状态。</li> <li><strong>可见性判断：</strong> 事务根据 <strong>Read View</strong> 和数据版本的事务 ID 来判断数据是否对它（也就是当前事务）可见，不可见则沿着版本链回溯查找旧版本。</li></ol> <h3 id="mvcc的协作关系"><a href="#mvcc的协作关系" class="header-anchor">#</a> MVCC的协作关系</h3> <ul><li>MVCC 主要用于实现 <strong>Read Committed</strong> 和 <strong>Repeatable Read</strong> 隔离级别。
+<ol><li>在 Read Committed 下，每次读操作生成新的 Read View；</li> <li>在 Repeatable Read 下，事务开始时只生成一个 Read View。</li></ol></li> <li>MVCC 并<strong>不取代锁，而是与锁协同工作</strong>，使得读操作通常无需加锁，而写操作仍需加锁。</li></ul> <h2 id="详细回答"><a href="#详细回答" class="header-anchor">#</a> 详细回答</h2> <h3 id="mvcc的相关概念-2"><a href="#mvcc的相关概念-2" class="header-anchor">#</a> MVCC的相关概念</h3> <ol><li><strong>为什么需要MVCC？</strong> <ul><li>在数据库系统中，为了保证数据的一致性，当<strong>多个事务并发执行</strong>时，需要采取并发控制机制。</li> <li><strong>传统</strong>的并发控制机制主要<strong>依赖于锁</strong>，通过对数据加锁来协调并发事务的访问。然而，在<strong>高并发</strong>场景下，频繁的加锁和释放锁会导致大量的锁等待和阻塞，降低数据库的吞吐量和响应速度。</li> <li>MVCC的出现，就是为了提高数据库的并发性能，并且减少读写冲突时的锁等待。</li></ul></li> <li><strong>什么是MVCC？</strong> <ul><li>MVCC 的全称是 <strong>Multi-Version Concurrency Control</strong>，即<strong>多版本并发控制</strong>。</li> <li>它的<strong>核心思想</strong>是<strong>通过保存数据的多个版本来实现读写操作的并发执行</strong>。</li> <li>当一个事务需要读取数据时，它读取的是数据的一个<strong>历史快照</strong>，而不是数据的最新版本。这个快照是事务开始时的数据状态。</li> <li>这样，<strong>读操作就可以在不加锁的情况下进行，不会阻塞写操作</strong>，写操作也不会阻塞读操作，从而提高了数据库的并发性能。</li></ul></li> <li><strong>MVCC的优缺点？</strong> <ul><li><strong>优点：</strong><br>
+① <strong>提高读写并发性：</strong> 允许多个事务同时读取和写入数据，减少锁竞争。<br>
+② <strong>降低锁开销：</strong> 普通的读操作通常不需要加锁，降低了锁管理的开销。</li> <li><strong>缺点：</strong><br>
+① <strong>增加存储开销：</strong> 需要额外的空间来存储数据的旧版本。<br>
+② <strong>清理旧版本开销：</strong> 需要后台线程（如 Purge 线程）来清理不再需要的旧版本数据，这也会带来一定的开销。</li></ul></li></ol> <h3 id="mvcc的工作原理-2"><a href="#mvcc的工作原理-2" class="header-anchor">#</a> MVCC的工作原理</h3> <ol><li><strong>版本链 (Version Chain):</strong> <ul><li><strong>隐藏列：</strong> InnoDB 存储引擎在<strong>每行数据</strong>后面会添加两个隐藏列：<br>
+① <code>DB_TRX_ID</code> (Transaction ID): 记录了<strong>最近一次修改该行的事务</strong>的 ID。<br>
+② <code>DB_ROLL_PTR</code> (回滚指针): 指向存储在 <strong><code>Undo Log</code></strong> 中的<strong>该行上一个版本的记录</strong>。</li> <li><strong>版本链形成：</strong> 通过 <code>DB_ROLL_PTR</code>隐藏列，同一行数据的不同版本会被连接起来，形成一个链表，也就是我们说的<strong>版本链</strong>。<strong>最新版本的记录位于链的头部，旧版本的记录通过回滚指针连接起来</strong>。</li> <li><strong>Undo Log 的作用：</strong> Undo Log 是 InnoDB 的<strong>回滚日志</strong>，它不仅用于事务回滚，还用于存储数据的旧版本。当一个事务修改数据时，会将数据的旧版本写入 Undo Log，并更新当前记录的 <code>DB_ROLL_PTR</code> ，使其指向这个旧版本。</li></ul></li> <li><strong>读视图 (Read View):</strong> <ul><li><strong>概念：</strong> Read View 是 MVCC 机制中一个非常重要的概念，它代表了事务开始时，数据库中<strong>可见的数据版本集合</strong>。</li> <li><strong>生成时机：</strong> 在 Repeatable Read 隔离级别下，Read View 是在每个事务开始时生成；而在 Read Committed 隔离级别下，Read View是在每次执行 <code>SELECT</code> 语句时生成。</li> <li><strong>包含信息：</strong> Read View 主要包含以下信息：<br>
+① <code>m_ids</code>: 是指生成 Read View 时，系统中所有<strong>活跃的（尚未提交或回滚的）事务</strong>的 ID 列表。<br>
+② <code>min_trx_id</code>: 是指<code>m_ids</code> 列表中的<strong>最小事务 ID</strong>。<br>
+③ <code>max_trx_id</code>: 是指生成 Read View 时，系统<strong>即将分配给下一个新事务的 ID</strong>。<br>
+④ <code>creator_trx_id</code>: 是指生成这个 Read View 的<strong>当前事务本身的 ID</strong>。</li></ul></li> <li><strong>可见性判断规则：</strong> <ul><li>当一个事务<strong>读取</strong>一行数据时，它会<strong>获取当前数据的最新版本</strong>，并<strong>检查该版本的 <code>DB_TRX_ID</code></strong>。然后，根据以下规则使用 Read View 来<strong>判断该版本是否对当前事务可见</strong>：<br>
+① 如果 <code>DB_trx_id</code> &lt; <code>min_trx_id</code>：表示该版本在当前事务开始之前就已经提交，那么该数据对当前事务<strong>可见</strong>。<br>
+② 如果 <code>DB_trx_id</code> &gt;= <code>max_trx_id</code>：表示该版本在当前事务开始之后才产生，那么该数据对当前事务<strong>不可见</strong>。<br>
+③ 如果 <code>min_trx_id</code> &lt;= <code>DB_trx_id</code> &lt; <code>max_trx_id</code>：又分为两种子情况——若 <code>DB_trx_id</code> 在 <code>m_ids</code> 列表中，则表示该版本是由一个活跃事务修改的，那么该数据对当前事务<strong>不可见</strong>；若 <code>DB_trx_id</code> 不在 <code>m_ids</code> 列表中，则表示该版本是由一个已提交的事务修改的，那么该数据对当前事务<strong>可见</strong>。</li> <li>如果当前版本不可见，事务会<strong>沿着版本链向上回溯</strong>，查找更旧的版本，直到找到一个可见的版本。</li></ul></li></ol> <h3 id="mvcc的协作关系-2"><a href="#mvcc的协作关系-2" class="header-anchor">#</a> MVCC的协作关系</h3> <ol><li><strong>MVCC与事务隔离级别的关系：</strong> <ul><li>MVCC 是实现 <strong>Read Committed</strong> 和 <strong>Repeatable Read</strong> 这两个隔离级别的关键机制。</li> <li><strong>Read Committed：</strong> 在该级别下，<strong>每次执行 <code>SELECT</code> 语句时都会生成一个新的 Read View</strong>。这意味着一个事务可以读取到其他事务在它执行期间已经提交的修改，从而导致<strong>不可重复读</strong>。</li> <li><strong>Repeatable Read：</strong> 在该级别下，<strong>事务只在开始时生成一个 Read View，并在整个事务执行期间都使用这个 Read View</strong>。这意味着一个事务只能看到它开始时的数据快照，而不会受到其他事务在它执行期间提交的修改的影响，从而解决了不可重复读。</li> <li>MVCC <strong>不能</strong>解决 <strong>Serializable</strong> 隔离级别下的并发问题，Serializable 隔离级别通常完全依赖于锁来实现串行执行。MVCC 也<strong>不能</strong>解决 <strong>Read Uncommitted</strong> 隔离级别下的并发问题，因为 Read Uncommitted 允许读取未提交的数据，与 MVCC 的多版本特性无关。</li></ul></li> <li><strong>MVCC与锁的关系：</strong> <ul><li>MVCC 并不是完全取代了锁，而是与锁<strong>协同工作</strong>。</li> <li>在 Read Committed 和 Repeatable Read 隔离级别下，MVCC 使得普通的 <strong>SELECT</strong> 操作（快照读）通常<strong>不需要加锁</strong>，可以并发执行，极大地提高了读操作的性能。</li> <li>然而，<strong>写操作</strong>（如 INSERT, UPDATE, DELETE）以及一些特殊的读操作（如 <code>SELECT ... FOR UPDATE</code> 或 <code>SELECT ... LOCK IN SHARE MODE</code>）仍然需要加锁，以保证数据修改的原子性、一致性和隔离性。锁用于控制 <code>写-写</code>冲突 和 <code>写-读</code>冲突。</li></ul></li></ol> <h2 id="知识拓展"><a href="#知识拓展" class="header-anchor">#</a> 知识拓展</h2> <ol><li><strong>MVCC的版本链（Version Chain）示意图如下</strong>：<br> <img src="https://file1.kamacoder.com/i/bagu/mvcc_version_chain.jpg" alt="image"></li> <li><strong>面试官可能的追问1：</strong> “MVCC 如何解决幻读问题？（针对 MySQL InnoDB 的 Repeatable Read）”
+<ul><li><strong>简答：</strong> 在 MySQL InnoDB 的 Repeatable Read 级别下，MVCC 结合 <strong>Next-Key Lock</strong>（行锁和间隙锁的组合）来解决幻读问题。MVCC 保证了事务在读取数据时看到的是一个快照，而 Next-Key Lock 则阻止了其他事务在查询范围内插入新的记录，从而避免了幻读。</li></ul></li> <li><strong>面试官可能的追问2：</strong> “Undo Log 在 MVCC 中有什么作用？”
+<ul><li><strong>简答：</strong> Undo Log 在 MVCC 中主要有两个作用：一是用于事务回滚，当事务失败时，可以通过 Undo Log 中的记录撤销已执行的操作；二是用于存储数据的旧版本，这些旧版本构成了版本链，供 MVCC 的读操作读取。</li></ul></li> <li><strong>面试官可能的追问3：</strong> “Read View 是如何被垃圾回收的？”
+<ul><li><strong>简答：</strong> 当一个事务提交或回滚后，它所创建的 Read View 就不再需要了。系统会有一个后台线程（Purge 线程）来扫描 Undo Log，清理那些不再被任何活跃事务的 Read View 引用的旧版本数据。</li></ul></li></ol></div> <footer class="page-edit"><!----> <div class="last-updated"><span class="prefix">Last Updated:</span> <span class="time">3/10/2026, 6:08:48 PM</span></div></footer> <div class="page-nav"><p class="inner"><span class="prev">
+      ←
+      <a href="/base/database-locks.html" class="prev">
+        什么是数据库中的锁，有哪些类型？
+      </a></span> <span class="next"><a href="/base/acid-properties.html">
+        事务的四大特性有哪些？
+      </a>
+      →
+    </span></p></div>  <div class="comments-wrapper" data-v-558649bb><div class="comments-header" data-v-558649bb><h3 class="comments-title" data-v-558649bb>评论</h3> <!----></div> <div class="comments-loading" data-v-558649bb><p data-v-558649bb>验证登录状态...</p></div> <!----> <!----> <!----></div></main> <aside class="page-sidebar"> <div class="page-side-toolbar"><div class="option-box"><img src="/images/system/toggle.png" width="30px" alt="侧边栏" class="nozoom"> <span class="show-txt">侧边栏</span></div> <div class="option-box"><img src="/images/system/dark.svg" width="30px" alt="夜间模式" class="nozoom"> <span class="show-txt">夜间</span></div> <div class="option-box"><a href="https://jianli.kamacoder.com/" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/2025-08-14kamajianli.jpg" width="25px" alt="卡码简历" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码简历</span></a></div> <div class="option-box"><a href="https://programmercarl.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/代码随想录.jpg" width="25px" alt="代码随想录" class="nozoom"> <span class="show-txt" style="margin-top: 5px">代码随想录</span></a></div> <div class="option-box"><a href="https://toudi.kamacoder.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/卡码投递表.jpg" width="25px" alt="卡码投递表" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码投递表🔥</span></a></div> <div class="option-box"><img src="/images/system/实习校招202503.png" width="25px" alt="2026实习校招群" class="nozoom"> <span class="show-txt">2026群</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">添加客服微信</span> <img src="/assets/img/26校招.5e9d30da.jpg" height="180px" alt="2026实习校招客服微信" style="margin: 10px">
+            PS：通过微信后，请发送<b>姓名-学校-年级-2026实习/校招</b></div></div></div></div> <div class="option-box"><img src="/images/system/red-heart.png" width="25px" alt="支持卡码笔记" class="nozoom"> <span class="show-txt">支持卡码笔记</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">鼓励/支持/赞赏Carl</span> <img height="180px" src="/assets/img/网站赞赏.69fb25a5.jpg" alt="卡码笔记赞赏码" style="margin: 5px"> <br>1.
+            如果感觉本站对你很有帮助，也可以请Carl喝杯奶茶，金额大小不重要，心意已经收下
+            <br>2. 希望大家都能梦想成真，有好的前程，加油💪
+          </div></div></div></div></div>  </aside></div><div class="global-ui"><!----></div></div>
+    <script src="/assets/js/app.9998fd5e.js" defer></script><script src="/assets/js/2.a7b01108.js" defer></script><script src="/assets/js/1.86f1b283.js" defer></script><script src="/assets/js/72.a44af0c6.js" defer></script>
+  </body>
+</html>

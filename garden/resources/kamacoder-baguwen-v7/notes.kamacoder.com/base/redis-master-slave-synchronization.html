@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Redis的主从同步是怎么实现的？ | 卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文</title>
+    <meta name="generator" content="VuePress 1.9.10">
+    <link rel="icon" href="https://file1.kamacoder.com/i/web/2025-08-14kamabij.jpg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script>
+      var _hmt = _hmt || [];
+      (function() {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?2ea20ae8da307f7b54137ae9b4fc95b0";
+        var s = document.getElementsByTagName("script")[0]; 
+        s.parentNode.insertBefore(hm, s);
+      })();
+       // 统计每个页面的UV、PV，核心：监听 VuePress 路由变化，主动上报页面访问
+      document.addEventListener('vuepress:routeChanged', () => {
+        if (window._hmt) {
+          _hmt.push(['_trackPageview', window.location.pathname + window.location.hash]);
+        }
+      });
+    </script>
+    <meta name="description" content="Redis主从同步详解，讲清全量同步和增量同步的触发条件与执行流程，拆解PSYNC命令、复制ID、复制偏移量、复制积压缓冲区、RDB传输和命令传播机制，并扩展主从切换、哨兵模式、数据一致性、复制延迟、故障恢复、脑裂风险和Redis高可用面试追问。">
+    <meta property="article:modified_time" content="2026-05-25T07:50:35.000Z">
+    <meta property="og:site_name" content="卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文">
+    <meta property="og:title" content="Redis的主从同步是怎么实现的？">
+    <meta property="og:description" content="Redis主从同步详解，讲清全量同步和增量同步的触发条件与执行流程，拆解PSYNC命令、复制ID、复制偏移量、复制积压缓冲区、RDB传输和命令传播机制，并扩展主从切换、哨兵模式、数据一致性、复制延迟、故障恢复、脑裂风险和Redis高可用面试追问。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="/base/redis-master-slave-synchronization.html">
+    <meta name="twitter:title" content="Redis的主从同步是怎么实现的？">
+    <meta name="twitter:description" content="Redis主从同步详解，讲清全量同步和增量同步的触发条件与执行流程，拆解PSYNC命令、复制ID、复制偏移量、复制积压缓冲区、RDB传输和命令传播机制，并扩展主从切换、哨兵模式、数据一致性、复制延迟、故障恢复、脑裂风险和Redis高可用面试追问。">
+    <meta name="twitter:url" content="/base/redis-master-slave-synchronization.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:label2" content="Filed under">
+    <meta name="twitter:data2" content="Redis, 数据库面试题, 八股文">
+    <meta property="article:tag" content="Redis">
+    <meta name="keywords" content="Redis主从同步,Redis PSYNC,Redis哨兵,Redis复制,Redis面试题,Redis八股文">
+    <meta name="tags" content="Redis,数据库面试题,八股文">
+    <meta name="theme-color" content="#3eaf7c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
+    <link rel="preload" href="/assets/css/0.styles.88f5c8c7.css" as="style"><link rel="preload" href="/assets/js/app.9998fd5e.js" as="script"><link rel="preload" href="/assets/js/2.a7b01108.js" as="script"><link rel="preload" href="/assets/js/1.86f1b283.js" as="script"><link rel="preload" href="/assets/js/90.40dafc7b.js" as="script">
+    <link rel="stylesheet" href="/assets/css/0.styles.88f5c8c7.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container sidebar-open"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/" class="home-link router-link-active"><!----> <span class="site-name">卡码笔记-最强八股文</span></a> <div class="links"><!----> <nav class="nav-links can-hide"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav>  <ul class="sidebar-links"><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>操作系统</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>网络</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading open"><span>数据库</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>SQL</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>索引</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>锁与MVCC</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>事务</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading open"><span>Redis</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/base/redis-data-structures.html" class="sidebar-link">Redis常见的数据结构</a></li><li><a href="/base/redis-cache-eviction.html" class="sidebar-link">Redis缓存淘汰策略</a></li><li><a href="/base/redis-expiration-policies.html" class="sidebar-link">Redis过期策略</a></li><li><a href="/base/redis-persistence-rdb-aof.html" class="sidebar-link">Redis持久化机制：RDB和AOF</a></li><li><a href="/base/redis-cache-stampeding-penetration-avalanche.html" class="sidebar-link">缓存雪崩、穿透、击穿</a></li><li><a href="/base/redis-distributed-lock.html" class="sidebar-link">Redis分布式锁</a></li><li><a href="/base/redis-bloom-filter.html" class="sidebar-link">Redis布隆过滤器</a></li><li><a href="/base/redis-master-slave-synchronization.html" aria-current="page" class="active sidebar-link">Redis主从同步</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/base/redis-master-slave-synchronization.html#简要回答" class="sidebar-link">简要回答</a></li><li class="sidebar-sub-header"><a href="/base/redis-master-slave-synchronization.html#详细回答" class="sidebar-link">详细回答</a></li><li class="sidebar-sub-header"><a href="/base/redis-master-slave-synchronization.html#知识图解" class="sidebar-link">知识图解</a></li><li class="sidebar-sub-header"><a href="/base/redis-master-slave-synchronization.html#代码示例" class="sidebar-link">代码示例</a></li><li class="sidebar-sub-header"><a href="/base/redis-master-slave-synchronization.html#知识扩展" class="sidebar-link">知识扩展</a></li></ul></li></ul></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>其他</span> <span class="arrow right"></span></p> <!----></section></li></ul></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>计算机组成原理</span> <span class="arrow right"></span></p> <!----></section></li></ul> </aside> <main class="page"> <div class="page-meta-host" style="display:none;"></div> <!----> <div class="theme-default-content content__default"><h1 id="redis的主从同步是怎么实现的"><a href="#redis的主从同步是怎么实现的" class="header-anchor">#</a> Redis的主从同步是怎么实现的？</h1> <h2 id="简要回答"><a href="#简要回答" class="header-anchor">#</a> 简要回答</h2> <ul><li>Redis 的主从同步就是从节点与主节点建立复制连接后，发送 <code>PSYNC</code> 请求，主节点根据复制 ID 和偏移量决定走<strong>全量同步</strong>还是<strong>增量同步</strong>。</li> <li><strong>全量同步</strong>一般发生在首次复制、从节点刚上线、或者增量数据已经追不上的场景中。主节点会 <code>BGSAVE</code> 生成 RDB 发给从节点，从节点加载 RDB 后，再接收这段时间积压的增量写命令。</li> <li><strong>增量同步</strong>发生在短暂断线重连场景。从节点把自己记住的 <code>replid</code> 和 <code>offset</code> 带给主节点，只要主节点的 backlog 里还保留着缺失数据，就可以直接补发，不必重新全量复制。</li></ul> <h2 id="详细回答"><a href="#详细回答" class="header-anchor">#</a> 详细回答</h2> <ol><li><p>Redis 主从同步实现了<strong>读写分离</strong>，让主节点负责写，从节点可以分担读的流量。同时是<strong>高可用基础</strong>，在哨兵和集群做故障转移时，底层都依赖复制链路。</p></li> <li><p><strong>复制连接建立</strong>的过程是从节点连接主节点后发送 <code>PING</code> 确认链路可用，然后发送 <code>REPLCONF</code> 上报自己的监听端口、能力等信息，最后发送 <code>PSYNC</code> 请求同步数据。</p></li> <li><p><strong>全量同步流程：</strong>
+当从节点第一次复制，或者主节点发现无法做部分重同步时，就会走全量复制。</p> <p>首先由从节点发送 <code>PSYNC ? -1</code>，表示自己没有历史复制上下文。主节点回复全量同步指令，并执行 <code>BGSAVE</code> 生成 RDB 快照。然后主节点把 RDB 文件发送给从节点。从节点清空旧数据，加载这份 RDB。</p> <p>主节点在生成和发送 RDB 期间，并不会停止接收写请求，而是把新增写命令先写进复制缓冲区。RDB 发送完成后，主节点再把缓冲区里的增量命令补发给从节点。</p></li> <li><p><strong>增量同步流程：</strong> Redis 复制不是每次断线都全量重来，而是尽量做增量复制，它能大幅减少全量同步成本。</p> <p>从节点会记录自己同步到哪个偏移量 <code>offset</code>，主节点也会维护自己的复制偏移量和一个<strong>复制积压缓冲区</strong> <code>repl_backlog_buffer</code>。当从节点短暂断线后重新连接，会把自己记住的 <code>replid + offset</code> 通过 <code>PSYNC</code> 发给主节点：如果主节点 backlog 里还保留着从这个 offset 之后的命令，就直接补发缺失数据。如果 backlog 已经覆盖不到了，或者复制 ID 对不上，就只能重新走全量同步。</p></li> <li><p>主从同步在完成首次同步后，主节点会持续把后续写命令异步传播给从节点，这个过程也叫<strong>命令传播</strong>。从节点会周期性给主节点回 ACK，告诉主节点自己已经同步到哪个 offset。</p> <p>Redis 还会依赖以下几个核心状态来维持复制关系：如<code>master_replid</code>是当前复制流的唯一标识，<code>offset</code>是复制数据流的位置指针，还有<code>repl_backlog_buffer</code>会用于断线重连后的增量补偿。</p></li> <li><p>主从同步实现时需要注意</p> <ul><li>全量同步需要 <code>fork</code> 子进程、生成 RDB、走磁盘或网络传输，对大实例会有明显开销。</li> <li>如果积压缓冲区太小，网络一抖动就可能追不上，导致频繁全量同步，要设置合理的backlog大小。</li> <li>主从复制是最终一致，不是强一致，因为复制操作是异步的，主节点写成功，不代表所有从节点已经同步完成。</li></ul></li></ol> <h2 id="知识图解"><a href="#知识图解" class="header-anchor">#</a> 知识图解</h2> <ol><li>全量同步示意图
+<img src="https://file1.kamacoder.com/i/bagu/20260413_Redis%E5%85%A8%E9%87%8F%E5%90%8C%E6%AD%A5.jpg" alt="Redis全量同步流程图"></li> <li>增量同步示意图
+<img src="https://file1.kamacoder.com/i/bagu/20260415_Redis_%E5%A2%9E%E9%87%8F%E5%90%8C%E6%AD%A5.jpg" alt="Redis增量同步流程图"></li></ol> <h2 id="代码示例"><a href="#代码示例" class="header-anchor">#</a> 代码示例</h2> <div class="language-plain line-numbers-mode"><pre class="language-plain"><code>REPLICAOF 192.168.1.10 6379
+
+# 查看复制状态
+INFO replication
+
+# 首次同步时，从节点通常会发送类似请求
+PSYNC ? -1
+
+# 断线重连后，可能带着已有的 replid 和 offset 请求部分重同步
+PSYNC &lt;master_replid&gt; &lt;offset&gt;
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br></div></div><h2 id="知识扩展"><a href="#知识扩展" class="header-anchor">#</a> 知识扩展</h2> <ol><li>面试官可能追问：</li></ol> <ul><li><u>Q1</u>：<code>PSYNC</code> 和早期的 <code>SYNC</code> 有什么区别？
+<ul><li><code>SYNC</code> 基本只有全量复制思路，而 <code>PSYNC</code> 支持根据 <code>replid + offset</code> 做部分重同步，所以网络短暂抖动后不必每次都全量复制。</li></ul></li> <li><u>Q2</u>：为什么 replication backlog 很重要？
+<ul><li>因为它决定了从节点断线重连后能不能直接补发缺失命令。如果 backlog 太小，稍微积压一点就会被覆盖，结果只能重新全量同步。</li></ul></li> <li><u>Q3</u>：全量同步期间，主节点还能继续处理写请求吗？
+<ul><li>可以。主节点会继续接收写请求，只是把这段时间的新写命令临时记到复制缓冲区，等 RDB 发完后再补给从节点。</li></ul></li> <li><u>Q4</u>：主从复制能保证强一致吗？
+<ul><li>不能。Redis 主从复制默认是异步的，所以主节点写成功后，从节点可能还没来得及同步完成，读取从节点时可能看到旧数据。</li></ul></li></ul></div> <footer class="page-edit"><!----> <div class="last-updated"><span class="prefix">Last Updated:</span> <span class="time">5/25/2026, 3:50:35 PM</span></div></footer> <div class="page-nav"><p class="inner"><span class="prev">
+      ←
+      <a href="/base/redis-bloom-filter.html" class="prev">
+        Redis布隆过滤器
+      </a></span> <span class="next"><a href="/base/mysql-storage-engines.html">
+        MySQL的执行引擎有哪些？
+      </a>
+      →
+    </span></p></div>  <div class="comments-wrapper" data-v-558649bb><div class="comments-header" data-v-558649bb><h3 class="comments-title" data-v-558649bb>评论</h3> <!----></div> <div class="comments-loading" data-v-558649bb><p data-v-558649bb>验证登录状态...</p></div> <!----> <!----> <!----></div></main> <aside class="page-sidebar"> <div class="page-side-toolbar"><div class="option-box"><img src="/images/system/toggle.png" width="30px" alt="侧边栏" class="nozoom"> <span class="show-txt">侧边栏</span></div> <div class="option-box"><img src="/images/system/dark.svg" width="30px" alt="夜间模式" class="nozoom"> <span class="show-txt">夜间</span></div> <div class="option-box"><a href="https://jianli.kamacoder.com/" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/2025-08-14kamajianli.jpg" width="25px" alt="卡码简历" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码简历</span></a></div> <div class="option-box"><a href="https://programmercarl.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/代码随想录.jpg" width="25px" alt="代码随想录" class="nozoom"> <span class="show-txt" style="margin-top: 5px">代码随想录</span></a></div> <div class="option-box"><a href="https://toudi.kamacoder.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/卡码投递表.jpg" width="25px" alt="卡码投递表" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码投递表🔥</span></a></div> <div class="option-box"><img src="/images/system/实习校招202503.png" width="25px" alt="2026实习校招群" class="nozoom"> <span class="show-txt">2026群</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">添加客服微信</span> <img src="/assets/img/26校招.5e9d30da.jpg" height="180px" alt="2026实习校招客服微信" style="margin: 10px">
+            PS：通过微信后，请发送<b>姓名-学校-年级-2026实习/校招</b></div></div></div></div> <div class="option-box"><img src="/images/system/red-heart.png" width="25px" alt="支持卡码笔记" class="nozoom"> <span class="show-txt">支持卡码笔记</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">鼓励/支持/赞赏Carl</span> <img height="180px" src="/assets/img/网站赞赏.69fb25a5.jpg" alt="卡码笔记赞赏码" style="margin: 5px"> <br>1.
+            如果感觉本站对你很有帮助，也可以请Carl喝杯奶茶，金额大小不重要，心意已经收下
+            <br>2. 希望大家都能梦想成真，有好的前程，加油💪
+          </div></div></div></div></div>  </aside></div><div class="global-ui"><!----></div></div>
+    <script src="/assets/js/app.9998fd5e.js" defer></script><script src="/assets/js/2.a7b01108.js" defer></script><script src="/assets/js/1.86f1b283.js" defer></script><script src="/assets/js/90.40dafc7b.js" defer></script>
+  </body>
+</html>

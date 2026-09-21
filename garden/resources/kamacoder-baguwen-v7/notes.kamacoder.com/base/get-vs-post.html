@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>GET请求和POST请求的区别？｜高频面试题｜计算机网络高频面试题｜HTTP方法、幂等性、安全性 | 卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文</title>
+    <meta name="generator" content="VuePress 1.9.10">
+    <link rel="icon" href="https://file1.kamacoder.com/i/web/2025-08-14kamabij.jpg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script>
+      var _hmt = _hmt || [];
+      (function() {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?2ea20ae8da307f7b54137ae9b4fc95b0";
+        var s = document.getElementsByTagName("script")[0]; 
+        s.parentNode.insertBefore(hm, s);
+      })();
+       // 统计每个页面的UV、PV，核心：监听 VuePress 路由变化，主动上报页面访问
+      document.addEventListener('vuepress:routeChanged', () => {
+        if (window._hmt) {
+          _hmt.push(['_trackPageview', window.location.pathname + window.location.hash]);
+        }
+      });
+    </script>
+    <meta name="description" content="GET请求和POST请求是HTTP协议中最核心的两种方法，也是面试高频考点。本文从用途、数据传输、安全性、缓存、幂等性等七个维度详细对比了两者的区别，并澄清了关于数据大小限制和安全性的常见误区。掌握GET用于安全幂等的获取资源，POST用于提交可能改变服务器状态的数据，是理解RESTful API设计和进行Web开发的基础。">
+    <meta property="article:modified_time" content="2026-03-10T10:08:48.000Z">
+    <meta property="og:site_name" content="卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文">
+    <meta property="og:title" content="GET请求和POST请求的区别？｜高频面试题｜计算机网络高频面试题｜HTTP方法、幂等性、安全性">
+    <meta property="og:description" content="GET请求和POST请求是HTTP协议中最核心的两种方法，也是面试高频考点。本文从用途、数据传输、安全性、缓存、幂等性等七个维度详细对比了两者的区别，并澄清了关于数据大小限制和安全性的常见误区。掌握GET用于安全幂等的获取资源，POST用于提交可能改变服务器状态的数据，是理解RESTful API设计和进行Web开发的基础。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="/base/get-vs-post.html">
+    <meta name="twitter:title" content="GET请求和POST请求的区别？｜高频面试题｜计算机网络高频面试题｜HTTP方法、幂等性、安全性">
+    <meta name="twitter:description" content="GET请求和POST请求是HTTP协议中最核心的两种方法，也是面试高频考点。本文从用途、数据传输、安全性、缓存、幂等性等七个维度详细对比了两者的区别，并澄清了关于数据大小限制和安全性的常见误区。掌握GET用于安全幂等的获取资源，POST用于提交可能改变服务器状态的数据，是理解RESTful API设计和进行Web开发的基础。">
+    <meta name="twitter:url" content="/base/get-vs-post.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:label2" content="Filed under">
+    <meta name="twitter:data2" content="大厂面试题, 计算机网络, HTTP, 面试题, 高频考点">
+    <meta property="article:tag" content="大厂面试题">
+    <meta name="keywords" content="GET请求和POST请求的区别,GET和POST区别,HTTP GET POST,GET POST 面试题,GET请求特点,POST请求特点,大厂面试题,高频面试题,HTTP方法区别,RESTful API,幂等性,安全性,数据传输方式,缓存">
+    <meta name="tags" content="大厂面试题,计算机网络,HTTP,面试题,高频考点">
+    <meta name="theme-color" content="#3eaf7c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
+    <link rel="preload" href="/assets/css/0.styles.88f5c8c7.css" as="style"><link rel="preload" href="/assets/js/app.9998fd5e.js" as="script"><link rel="preload" href="/assets/js/2.a7b01108.js" as="script"><link rel="preload" href="/assets/js/1.86f1b283.js" as="script"><link rel="preload" href="/assets/js/50.4ddb5c8f.js" as="script">
+    <link rel="stylesheet" href="/assets/css/0.styles.88f5c8c7.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container sidebar-open"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/" class="home-link router-link-active"><!----> <span class="site-name">卡码笔记-最强八股文</span></a> <div class="links"><!----> <nav class="nav-links can-hide"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav>  <ul class="sidebar-links"><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>操作系统</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading open"><span>网络</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading open"><span>基础概念</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/base/tcp-vs-udp.html" class="sidebar-link">TCP和UDP的区别是什么？</a></li><li><a href="/base/http-methods.html" class="sidebar-link">HTTP请求方式有哪些？</a></li><li><a href="/base/get-vs-post.html" aria-current="page" class="active sidebar-link">GET请求和POST请求的区别？</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/base/get-vs-post.html#简要回答" class="sidebar-link">简要回答</a></li><li class="sidebar-sub-header"><a href="/base/get-vs-post.html#详细回答" class="sidebar-link">详细回答</a></li><li class="sidebar-sub-header"><a href="/base/get-vs-post.html#知识拓展" class="sidebar-link">知识拓展</a></li></ul></li><li><a href="/base/http-status-codes.html" class="sidebar-link">HTTP中常见的状态码有哪些？分别是什么含义？</a></li><li><a href="/base/http-headers.html" class="sidebar-link">HTTP请求中的头部字段有哪些常见的类型？它们各自的作用是什么？</a></li></ul></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>TCP 深入</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>HTTP 进阶</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>安全与缓存</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>综合应用</span> <span class="arrow right"></span></p> <!----></section></li></ul></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>数据库</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>计算机组成原理</span> <span class="arrow right"></span></p> <!----></section></li></ul> </aside> <main class="page"> <div class="page-meta-host" style="display:none;"></div> <!----> <div class="theme-default-content content__default"><h1 id="get请求和post请求的区别"><a href="#get请求和post请求的区别" class="header-anchor">#</a> GET请求和POST请求的区别？</h1> <h2 id="简要回答"><a href="#简要回答" class="header-anchor">#</a> 简要回答</h2> <h3 id="get请求和post请求的概念"><a href="#get请求和post请求的概念" class="header-anchor">#</a> GET请求和POST请求的概念</h3> <ol><li><strong>GET请求</strong>：
+<ul><li><strong>作用</strong>：请求指定资源，参数通过URL传递。</li> <li><strong>特点</strong>：<strong>安全</strong>（不修改服务器资源）、<strong>幂等</strong>（多次请求结果一致）、<strong>可缓存</strong>（响应可被浏览器或代理缓存）</li> <li><strong>场景</strong>：数据查询、页面加载。</li></ul></li> <li><strong>POST请求</strong>：
+<ul><li><strong>作用</strong>：提交数据（请求体携带数据）。</li> <li><strong>特点</strong>：<strong>不安全</strong>（可能修改服务器状态，eg: 新增订单）、<strong>不幂等</strong>（重复提交可能产生不同结果，eg: 多次创建订单）。</li> <li><strong>场景</strong>：表单提交、触发业务逻辑。</li></ul></li></ol> <h3 id="get请求和post请求的区别-2"><a href="#get请求和post请求的区别-2" class="header-anchor">#</a> GET请求和POST请求的区别</h3> <ul><li><p>如下表所示：</p> <table><thead><tr><th>对比角度</th> <th><strong>GET</strong></th> <th><strong>POST</strong></th></tr></thead> <tbody><tr><td><strong>用途</strong></td> <td>获取资源</td> <td>提交数据</td></tr> <tr><td><strong>数据传输</strong></td> <td>参数附加在URL中</td> <td>数据放在请求体中</td></tr> <tr><td><strong>数据大小</strong></td> <td>受URL长度限制</td> <td>理论上无限制</td></tr> <tr><td><strong>安全性</strong></td> <td>参数可见，不适合敏感信息</td> <td>数据不可见，相对更安全</td></tr> <tr><td><strong>缓存</strong></td> <td>可被缓存</td> <td>通常不被缓存</td></tr> <tr><td><strong>幂等性</strong></td> <td>幂等</td> <td>非幂等</td></tr> <tr><td><strong>编码类型</strong></td> <td>只允许ASCII字符</td> <td>支持多种编码类型</td></tr></tbody></table></li></ul> <h2 id="详细回答"><a href="#详细回答" class="header-anchor">#</a> 详细回答</h2> <h3 id="get请求和post请求的概念-2"><a href="#get请求和post请求的概念-2" class="header-anchor">#</a> GET请求和POST请求的概念</h3> <ol><li><strong>GET请求</strong>：
+<ul><li><strong>作用</strong>：请求指定资源，参数通过URL传递。</li> <li><strong>特点</strong>：<br>
+(1) 浏览器地址栏中的地址是：action 属性 [ + ? + 请求参数]；其中，请求参数的格式是：name=value&amp;name=value。<br>
+(2) 不安全（传输数据的信息直接暴露在了浏览器的地址栏）<br>
+(3) 数据长度受限制 (不同的浏览器规定不一样，一般 2k 个字符)</li> <li><strong>场景</strong>：数据查询、页面加载。</li></ul></li> <li><strong>POST请求</strong>：
+<ul><li><strong>作用</strong>：提交数据（请求体携带数据）。</li> <li><strong>特点</strong>：<br>
+(1) 浏览器地址栏中只有 action 属性值 , 提交的数据是携带在 http 请求中 , 不会展示在地址栏。数据真正存放在请求头后面的请求体中（原始请求中，请求头和请求体是在一起的）。请求体一般在<strong>载荷</strong>中（以Google浏览器为例）。<br>
+(2) 相对于 GET请求 要安全（数据不会直接显示在浏览器的地址栏）<br>
+(3) 理论上没有数据长度的限制</li> <li><strong>场景</strong>：表单提交、触发业务逻辑。</li></ul></li></ol> <h3 id="get请求和post请求的区别-3"><a href="#get请求和post请求的区别-3" class="header-anchor">#</a> GET请求和POST请求的区别</h3> <ol><li><strong>用途和语义</strong>：
+<ul><li>GET主要用于<strong>从服务器获取</strong>资源，如网页内容、图片或API数据。它应该是<strong>安全</strong>和<strong>幂等</strong>的，意味着多次相同的GET请求应该返回相同的结果，且不会改变服务器状态。</li> <li>POST主要用于<strong>向服务器提交</strong>数据，如提交表单或上传文件。它可能会改变服务器状态，因此不是幂等的。</li></ul></li> <li><strong>数据传输方式</strong>：
+<ul><li>GET请求将<strong>参数附加在URL中</strong>。</li> <li>POST请求将数据<strong>封装在HTTP请求的请求体中</strong>，不会出现在URL中。</li></ul></li> <li><strong>数据大小限制</strong>：
+<ul><li>GET请求<strong>受URL长度的限制</strong>，具体限制因浏览器和服务器而异，通常在2048-8192字符之间。</li> <li>POST请求<strong>理论上没有数据大小的限制</strong>，实际限制取决于服务器的配置。</li></ul></li> <li><strong>安全性</strong>：
+<ul><li>若从<strong>数据暴露的安全性</strong>考虑，GET参数在URL中可见，不适合传输敏感信息，如密码。若从<strong>服务器状态修改的安全性</strong>考虑，GET请求是幂等的，不修改服务器资源，因此安全。</li> <li>若从<strong>数据暴露的安全性</strong>考虑，POST数据不会显示在URL中，相对更安全；但注意，两者都不是绝对安全的，敏感数据应该使用HTTPS传输。若从<strong>服务器状态修改的安全性</strong>考虑，POST请求可能修改服务器状态，不安全。</li></ul></li> <li><strong>缓存</strong>：
+<ul><li>GET请求可以被<strong>浏览器</strong>缓存，也可以被<strong>中间代理服务器</strong>缓存，有利于提高效率。</li> <li>POST请求<strong>通常不被缓存</strong>，每次都会向服务器发送新的请求。</li></ul></li> <li><strong>幂等性</strong>：
+<ul><li>GET是<strong>幂等的</strong>，多次相同的GET请求应该返回相同的结果，不会改变服务器状态。</li> <li>POST<strong>不是幂等的</strong>，多次相同的POST请求可能会导致多次修改服务器状态或多次提交数据。</li></ul></li> <li><strong>编码类型</strong>：
+<ul><li>GET<strong>只允许ASCII字符</strong>，对于非ASCII字符需要进行URL编码。</li> <li>POST<strong>支持多种编码类型</strong>，可以发送复杂的数据结构，如JSON或XML。</li></ul></li></ol> <h2 id="知识拓展"><a href="#知识拓展" class="header-anchor">#</a> 知识拓展</h2> <ol><li><strong>一图胜千言</strong>：<br> <img src="https://file1.kamacoder.com/i/bagu/difference_GET_POST.jpg" alt="image"></li> <li>RESTful API设计：<strong>REST（Representational State Transfer）</strong> 是一种软件架构风格，其与HTTP请求方式的关系如下：
+<ul><li><strong>GET</strong>通常用于<strong>读取</strong>（Read）操作</li> <li><strong>POST</strong>用于<strong>创建</strong>（Create）操作</li> <li><strong>PUT</strong>用于<strong>更新</strong>（Update）操作</li> <li><strong>DELETE</strong>用于<strong>删除</strong>（Delete）操作</li></ul></li> <li><strong>GET和POST的安全性</strong>：对于CSRF（跨站请求伪造）攻击，POST请求相对更安全；对于XSS（跨站脚本）攻击，两种方法都需要注意输入验证；不论是用GET还是POST，使用<strong>HTTPS加密传输</strong>可以提高安全性。</li> <li><strong>GET和POST的性能优化</strong>：GET请求的缓存特性可用于提高应用性能；合理使用<strong>HTTP/2</strong>的<strong>多路复用</strong>特性可以优化两种类型的请求。</li></ol></div> <footer class="page-edit"><!----> <div class="last-updated"><span class="prefix">Last Updated:</span> <span class="time">3/10/2026, 6:08:48 PM</span></div></footer> <div class="page-nav"><p class="inner"><span class="prev">
+      ←
+      <a href="/base/http-methods.html" class="prev">
+        HTTP请求方式有哪些？
+      </a></span> <span class="next"><a href="/base/http-status-codes.html">
+        HTTP中常见的状态码有哪些？分别是什么含义？
+      </a>
+      →
+    </span></p></div>  <div class="comments-wrapper" data-v-558649bb><div class="comments-header" data-v-558649bb><h3 class="comments-title" data-v-558649bb>评论</h3> <!----></div> <div class="comments-loading" data-v-558649bb><p data-v-558649bb>验证登录状态...</p></div> <!----> <!----> <!----></div></main> <aside class="page-sidebar"> <div class="page-side-toolbar"><div class="option-box"><img src="/images/system/toggle.png" width="30px" alt="侧边栏" class="nozoom"> <span class="show-txt">侧边栏</span></div> <div class="option-box"><img src="/images/system/dark.svg" width="30px" alt="夜间模式" class="nozoom"> <span class="show-txt">夜间</span></div> <div class="option-box"><a href="https://jianli.kamacoder.com/" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/2025-08-14kamajianli.jpg" width="25px" alt="卡码简历" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码简历</span></a></div> <div class="option-box"><a href="https://programmercarl.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/代码随想录.jpg" width="25px" alt="代码随想录" class="nozoom"> <span class="show-txt" style="margin-top: 5px">代码随想录</span></a></div> <div class="option-box"><a href="https://toudi.kamacoder.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/卡码投递表.jpg" width="25px" alt="卡码投递表" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码投递表🔥</span></a></div> <div class="option-box"><img src="/images/system/实习校招202503.png" width="25px" alt="2026实习校招群" class="nozoom"> <span class="show-txt">2026群</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">添加客服微信</span> <img src="/assets/img/26校招.5e9d30da.jpg" height="180px" alt="2026实习校招客服微信" style="margin: 10px">
+            PS：通过微信后，请发送<b>姓名-学校-年级-2026实习/校招</b></div></div></div></div> <div class="option-box"><img src="/images/system/red-heart.png" width="25px" alt="支持卡码笔记" class="nozoom"> <span class="show-txt">支持卡码笔记</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">鼓励/支持/赞赏Carl</span> <img height="180px" src="/assets/img/网站赞赏.69fb25a5.jpg" alt="卡码笔记赞赏码" style="margin: 5px"> <br>1.
+            如果感觉本站对你很有帮助，也可以请Carl喝杯奶茶，金额大小不重要，心意已经收下
+            <br>2. 希望大家都能梦想成真，有好的前程，加油💪
+          </div></div></div></div></div>  </aside></div><div class="global-ui"><!----></div></div>
+    <script src="/assets/js/app.9998fd5e.js" defer></script><script src="/assets/js/2.a7b01108.js" defer></script><script src="/assets/js/1.86f1b283.js" defer></script><script src="/assets/js/50.4ddb5c8f.js" defer></script>
+  </body>
+</html>

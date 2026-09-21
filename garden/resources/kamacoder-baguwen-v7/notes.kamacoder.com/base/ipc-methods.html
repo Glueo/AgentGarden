@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>进程间有哪些通信方式？｜大厂面试题｜操作系统高频面试题｜信号量、共享内存、管道、消息队列、套接字 | 卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文</title>
+    <meta name="generator" content="VuePress 1.9.10">
+    <link rel="icon" href="https://file1.kamacoder.com/i/web/2025-08-14kamabij.jpg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script>
+      var _hmt = _hmt || [];
+      (function() {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?2ea20ae8da307f7b54137ae9b4fc95b0";
+        var s = document.getElementsByTagName("script")[0]; 
+        s.parentNode.insertBefore(hm, s);
+      })();
+       // 统计每个页面的UV、PV，核心：监听 VuePress 路由变化，主动上报页面访问
+      document.addEventListener('vuepress:routeChanged', () => {
+        if (window._hmt) {
+          _hmt.push(['_trackPageview', window.location.pathname + window.location.hash]);
+        }
+      });
+    </script>
+    <meta name="description" content="进程间通信（IPC）是操作系统面试高频考点，主要考察信号量、共享内存、消息队列、管道和套接字等五种核心方式。本文详解每种方式的原理、适用场景与区别，例如信号量用于同步互斥、共享内存效率最高、管道分匿名与命名、套接字用于网络通信，并对比其优缺点与典型实现，帮助应对大厂面试中关于进程同步、数据传输和分布式系统相关的提问。">
+    <meta property="article:modified_time" content="2026-03-10T10:08:48.000Z">
+    <meta property="og:site_name" content="卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文">
+    <meta property="og:title" content="进程间有哪些通信方式？｜大厂面试题｜操作系统高频面试题｜信号量、共享内存、管道、消息队列、套接字">
+    <meta property="og:description" content="进程间通信（IPC）是操作系统面试高频考点，主要考察信号量、共享内存、消息队列、管道和套接字等五种核心方式。本文详解每种方式的原理、适用场景与区别，例如信号量用于同步互斥、共享内存效率最高、管道分匿名与命名、套接字用于网络通信，并对比其优缺点与典型实现，帮助应对大厂面试中关于进程同步、数据传输和分布式系统相关的提问。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="/base/ipc-methods.html">
+    <meta name="twitter:title" content="进程间有哪些通信方式？｜大厂面试题｜操作系统高频面试题｜信号量、共享内存、管道、消息队列、套接字">
+    <meta name="twitter:description" content="进程间通信（IPC）是操作系统面试高频考点，主要考察信号量、共享内存、消息队列、管道和套接字等五种核心方式。本文详解每种方式的原理、适用场景与区别，例如信号量用于同步互斥、共享内存效率最高、管道分匿名与命名、套接字用于网络通信，并对比其优缺点与典型实现，帮助应对大厂面试中关于进程同步、数据传输和分布式系统相关的提问。">
+    <meta name="twitter:url" content="/base/ipc-methods.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:label2" content="Filed under">
+    <meta name="twitter:data2" content="大厂面试题, 操作系统, 高频考点, 面试题, 并发编程">
+    <meta property="article:tag" content="大厂面试题">
+    <meta name="keywords" content="进程间通信方式,IPC 面试题,信号量机制,共享内存,消息队列,管道通信,套接字 Socket,进程同步,大厂面试题,高频面试题,操作系统面试,匿名管道,命名管道,消息传递机制">
+    <meta name="tags" content="大厂面试题,操作系统,高频考点,面试题,并发编程">
+    <meta name="theme-color" content="#3eaf7c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
+    <link rel="preload" href="/assets/css/0.styles.88f5c8c7.css" as="style"><link rel="preload" href="/assets/js/app.9998fd5e.js" as="script"><link rel="preload" href="/assets/js/2.a7b01108.js" as="script"><link rel="preload" href="/assets/js/1.86f1b283.js" as="script"><link rel="preload" href="/assets/js/67.d92a2e7c.js" as="script">
+    <link rel="stylesheet" href="/assets/css/0.styles.88f5c8c7.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container sidebar-open"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/" class="home-link router-link-active"><!----> <span class="site-name">卡码笔记-最强八股文</span></a> <div class="links"><!----> <nav class="nav-links can-hide"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav>  <ul class="sidebar-links"><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading open"><span>操作系统</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>基础概念</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading open"><span>进程与线程</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/base/process-vs-thread.html" class="sidebar-link">进程和线程的区别？</a></li><li><a href="/base/ipc-methods.html" aria-current="page" class="active sidebar-link">进程间有哪些通信方式？</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/base/ipc-methods.html#简要回答" class="sidebar-link">简要回答</a></li><li class="sidebar-sub-header"><a href="/base/ipc-methods.html#详细回答" class="sidebar-link">详细回答</a></li><li class="sidebar-sub-header"><a href="/base/ipc-methods.html#知识图解" class="sidebar-link">知识图解</a></li><li class="sidebar-sub-header"><a href="/base/ipc-methods.html#知识拓展" class="sidebar-link">知识拓展</a></li></ul></li><li><a href="/base/process-scheduling-algorithms.html" class="sidebar-link">进程调度算法你了解多少？</a></li><li><a href="/base/scheduling-algorithms-scenarios.html" class="sidebar-link">进程调度算法有哪些？适用场景是什么？</a></li></ul></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>中断与异常</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>同步与互斥</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>死锁</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>内存管理</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>I/O 与设备管理</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>其他</span> <span class="arrow right"></span></p> <!----></section></li></ul></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>网络</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>数据库</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>计算机组成原理</span> <span class="arrow right"></span></p> <!----></section></li></ul> </aside> <main class="page"> <div class="page-meta-host" style="display:none;"></div> <!----> <div class="theme-default-content content__default"><h1 id="进程间有哪些通信方式"><a href="#进程间有哪些通信方式" class="header-anchor">#</a> 进程间有哪些通信方式？</h1> <h2 id="简要回答"><a href="#简要回答" class="header-anchor">#</a> 简要回答</h2> <ol><li><strong>信号量机制（Semaphore）</strong>：进程通过<strong>P / V操作</strong>控制信号量，可以有效地解决<strong>同步和互斥</strong>问题；信号量机制适合需要同步的场景，如避免竞争条件和死锁。</li> <li><strong>共享存储机制（Shared Memory）</strong>：共享内存是一种高效的进程间通信方式，允许多个进程直接访问同一块内存区域。共享存储机制适合需要<strong>高效数据传输</strong>的场景。</li> <li><strong>消息传递机制（Message Passing）</strong>：消息传递机制需要操作系统<strong>内核</strong>的支持，通过<strong>消息队列</strong> 或 <strong>信箱</strong>传递数据，消息以数据块的形式传输。消息传递机制支持不同类型的数据，适用于无关进程之间的通信。</li> <li><strong>管道通信机制（Pipeline）</strong>：管道通信机制适合进程间的简单数据传输，其又可细分为两类——<strong>①匿名管道</strong>：半双工通信，适用于父子进程或兄弟进程；<strong>②命名管道</strong>：具有文件名，适用于无关进程。</li> <li><strong>套接字机制（Socket）</strong>：Socket（套接字）是一种<strong>网络通信</strong>机制，可以在不同主机上的进程之间进行通信；Socket机制适合分布式系统和网络通信。</li></ol> <h2 id="详细回答"><a href="#详细回答" class="header-anchor">#</a> 详细回答</h2> <ol><li><strong>信号量机制（Semaphore）</strong>：信号量是一种<strong>同步通信机制</strong>，用于控制多个进程对共享资源的访问；信号量支持<strong>两种原子操作：P()（等待）和V()（信号）</strong>。</li> <li><strong>共享存储机制（Shared Memory）</strong>：共享存储机制又可细分为两种方式——①<strong>共享数据结构</strong>的通信方式：进程间共享同一个数据结构，编程人员需要考虑进程间的同步互斥问题，传输效率低；②<strong>共享存储区</strong>的通信方式：操作系统在内存中开辟一块共享存储区，多个进程可以对该内存区域进行读写，传输效率高。当进程希望对共享存储区进行存取时，会将自己的虚地址空间映射到共享存储区，并向操作系统提出申请。</li> <li><strong>消息传递机制（Message Passing）</strong>：进程之间可以调用由操作系统实现的通信命令来传递消息；实现消息传递即分别实现<strong>Send</strong> 和 <strong>Receive</strong>两个<strong>原语</strong>，用于消息的发送和接收。消息传递机制又可细分为两类——①<strong>直接通信方式</strong>：发送进程直接将消息发送给接收进程，将信息挂载到<strong>接收进程的消息队列</strong>上，接收进程从自己的消息队列中获取信息；②<strong>间接通信方式</strong>：操作系统额外<strong>创建一片空间用于存储各种消息</strong>，类似一个信箱，发送进程和接收进程依靠这个中间实体实现信息的发送和接收，这种方式也被称为 <u>“信箱通信模式”</u>，在计算机网络中被广泛运用。</li> <li><strong>管道通信机制（Pipeline）</strong>：管道机制又可细分为两种类型——<br> <strong>①匿名管道</strong>：即我们平时所说的“管道”通信，它使用一种共享文件来实现进程间通信，这种共享文件被称为“管道” 或 “pipe文件”，可以连接一个读进程和一个写进程。写进程以<u>字节流</u>的形式，将数据送入管道，读进程通过管道将数据读出。匿名管道是一种半双工的通信方式，数据只能单向流动，适用于父子进程或兄弟进程之间的通信；在UNIX/Linux系统中，使用pipe()系统调用创建匿名管道。<br> <strong>②命名管道（Named Pipe/FIFO）</strong>：一种特殊的管道，具有文件名，可以在无关进程之间使用；在UNIX/Linux系统中，使用mkfifo()系统调用创建命名管道。</li> <li><strong>套接字机制（Socket）</strong>：Socket是一种<strong>网络通信</strong>机制，支持不同主机上的进程之间进行通信。Socket支持网络通信，适用于分布式系统，其通信方式可以是面向连接的（如TCP），也可以是无连接的（如UDP）。</li></ol> <h2 id="知识图解"><a href="#知识图解" class="header-anchor">#</a> 知识图解</h2> <ol><li><strong>消息传递机制的示意图</strong>如下所示：<br> <img src="https://file1.kamacoder.com/i/bagu/Message_Passing.jpg" alt="image"></li> <li><strong>管道实现全双工通信</strong>的示意图，如下所示：<br> <img src="https://file1.kamacoder.com/i/bagu/full_duplex_communication.jpg" alt="image"></li></ol> <h2 id="知识拓展"><a href="#知识拓展" class="header-anchor">#</a> 知识拓展</h2> <ul><li>操作系统实现管道机制，需要提供三种机制——<strong>①</strong>同步机制；<strong>②</strong>互斥机制；<strong>③</strong>通信进程间确定对方存在的机制。</li> <li><strong>管道具有以下特点</strong>：
+<ol><li>同步：写进程向管道中写入一定量数据后，会进入阻塞状态，等待读进程将数据读出后将其唤醒；读进程在将管道中数据读完后，也会进入阻塞状态，等待写进程对管道写操作完毕后将其唤醒。</li> <li>互斥：当有一个进程在对一个管道读/写时，其他想要读/写该管道的进程必须等待。</li> <li>管道需要通信双方确定对方的存在，否则会陷入阻塞。</li> <li>管道是一个固定大小的 缓冲区（如4KB），在<strong>内核</strong>中实现，其大小不受磁盘大小的影响。</li> <li>管道的实质是一个共享文件，读进程将管道视为输出文件，写进程将管道视为输入文件，因此管道通信机制可以利用文件系统机制实现。</li> <li>读数据操作是一次性的，管道中的数据一旦被读取就会被抛弃。</li> <li>管道是<strong>半双工通信</strong>的，某一时刻，数据只能单向传输，若希望实现双向传输（即全双工通信），可以使用两个管道。</li></ol></li> <li>当多个进程读写同一个管道时，可能会出现读写错乱，解决方案——
+<ol><li>一个管道允许多个写进程，一个读进程；</li> <li>允许有多个写进程，多个读进程，但系统会让各个读进程轮流从管道中读数据。</li></ol></li></ul></div> <footer class="page-edit"><!----> <div class="last-updated"><span class="prefix">Last Updated:</span> <span class="time">3/10/2026, 6:08:48 PM</span></div></footer> <div class="page-nav"><p class="inner"><span class="prev">
+      ←
+      <a href="/base/process-vs-thread.html" class="prev">
+        进程和线程的区别？
+      </a></span> <span class="next"><a href="/base/process-scheduling-algorithms.html">
+        进程调度算法你了解多少？
+      </a>
+      →
+    </span></p></div>  <div class="comments-wrapper" data-v-558649bb><div class="comments-header" data-v-558649bb><h3 class="comments-title" data-v-558649bb>评论</h3> <!----></div> <div class="comments-loading" data-v-558649bb><p data-v-558649bb>验证登录状态...</p></div> <!----> <!----> <!----></div></main> <aside class="page-sidebar"> <div class="page-side-toolbar"><div class="option-box"><img src="/images/system/toggle.png" width="30px" alt="侧边栏" class="nozoom"> <span class="show-txt">侧边栏</span></div> <div class="option-box"><img src="/images/system/dark.svg" width="30px" alt="夜间模式" class="nozoom"> <span class="show-txt">夜间</span></div> <div class="option-box"><a href="https://jianli.kamacoder.com/" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/2025-08-14kamajianli.jpg" width="25px" alt="卡码简历" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码简历</span></a></div> <div class="option-box"><a href="https://programmercarl.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/代码随想录.jpg" width="25px" alt="代码随想录" class="nozoom"> <span class="show-txt" style="margin-top: 5px">代码随想录</span></a></div> <div class="option-box"><a href="https://toudi.kamacoder.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/卡码投递表.jpg" width="25px" alt="卡码投递表" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码投递表🔥</span></a></div> <div class="option-box"><img src="/images/system/实习校招202503.png" width="25px" alt="2026实习校招群" class="nozoom"> <span class="show-txt">2026群</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">添加客服微信</span> <img src="/assets/img/26校招.5e9d30da.jpg" height="180px" alt="2026实习校招客服微信" style="margin: 10px">
+            PS：通过微信后，请发送<b>姓名-学校-年级-2026实习/校招</b></div></div></div></div> <div class="option-box"><img src="/images/system/red-heart.png" width="25px" alt="支持卡码笔记" class="nozoom"> <span class="show-txt">支持卡码笔记</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">鼓励/支持/赞赏Carl</span> <img height="180px" src="/assets/img/网站赞赏.69fb25a5.jpg" alt="卡码笔记赞赏码" style="margin: 5px"> <br>1.
+            如果感觉本站对你很有帮助，也可以请Carl喝杯奶茶，金额大小不重要，心意已经收下
+            <br>2. 希望大家都能梦想成真，有好的前程，加油💪
+          </div></div></div></div></div>  </aside></div><div class="global-ui"><!----></div></div>
+    <script src="/assets/js/app.9998fd5e.js" defer></script><script src="/assets/js/2.a7b01108.js" defer></script><script src="/assets/js/1.86f1b283.js" defer></script><script src="/assets/js/67.d92a2e7c.js" defer></script>
+  </body>
+</html>

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>MySQL常考SQL语句分类整理：查询、聚合、连接、子查询、增删改与事务 | 卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文</title>
+    <meta name="generator" content="VuePress 1.9.10">
+    <link rel="icon" href="https://file1.kamacoder.com/i/web/2025-08-14kamabij.jpg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script>
+      var _hmt = _hmt || [];
+      (function() {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?2ea20ae8da307f7b54137ae9b4fc95b0";
+        var s = document.getElementsByTagName("script")[0]; 
+        s.parentNode.insertBefore(hm, s);
+      })();
+       // 统计每个页面的UV、PV，核心：监听 VuePress 路由变化，主动上报页面访问
+      document.addEventListener('vuepress:routeChanged', () => {
+        if (window._hmt) {
+          _hmt.push(['_trackPageview', window.location.pathname + window.location.hash]);
+        }
+      });
+    </script>
+    <meta name="description" content="MySQL常考SQL语句分类整理，覆盖SELECT查询、WHERE条件、ORDER BY排序、GROUP BY分组、聚合函数、JOIN连接、子查询、INSERT、UPDATE、DELETE、事务控制和常见面试写法，适合准备数据库基础、SQL面试题和后端开发面试的同学复习。">
+    <meta property="article:modified_time" content="2026-05-25T07:50:35.000Z">
+    <meta property="og:site_name" content="卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文">
+    <meta property="og:title" content="MySQL常考SQL语句分类整理：查询、聚合、连接、子查询、增删改与事务">
+    <meta property="og:description" content="MySQL常考SQL语句分类整理，覆盖SELECT查询、WHERE条件、ORDER BY排序、GROUP BY分组、聚合函数、JOIN连接、子查询、INSERT、UPDATE、DELETE、事务控制和常见面试写法，适合准备数据库基础、SQL面试题和后端开发面试的同学复习。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="/base/sql.html">
+    <meta name="twitter:title" content="MySQL常考SQL语句分类整理：查询、聚合、连接、子查询、增删改与事务">
+    <meta name="twitter:description" content="MySQL常考SQL语句分类整理，覆盖SELECT查询、WHERE条件、ORDER BY排序、GROUP BY分组、聚合函数、JOIN连接、子查询、INSERT、UPDATE、DELETE、事务控制和常见面试写法，适合准备数据库基础、SQL面试题和后端开发面试的同学复习。">
+    <meta name="twitter:url" content="/base/sql.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:label2" content="Filed under">
+    <meta name="twitter:data2" content="MySQL, SQL, 数据库面试题, 八股文">
+    <meta property="article:tag" content="MySQL">
+    <meta name="keywords" content="SQL语句,MySQL面试题,SELECT查询,JOIN连接,GROUP BY,子查询,数据库面试,后端面试,八股文">
+    <meta name="tags" content="MySQL,SQL,数据库面试题,八股文">
+    <meta name="theme-color" content="#3eaf7c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
+    <link rel="preload" href="/assets/css/0.styles.88f5c8c7.css" as="style"><link rel="preload" href="/assets/js/app.9998fd5e.js" as="script"><link rel="preload" href="/assets/js/2.a7b01108.js" as="script"><link rel="preload" href="/assets/js/1.86f1b283.js" as="script"><link rel="preload" href="/assets/js/95.e8f686b3.js" as="script">
+    <link rel="stylesheet" href="/assets/css/0.styles.88f5c8c7.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container sidebar-open"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/" class="home-link router-link-active"><!----> <span class="site-name">卡码笔记-最强八股文</span></a> <div class="links"><!----> <nav class="nav-links can-hide"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav>  <ul class="sidebar-links"><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>操作系统</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>网络</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading open"><span>数据库</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading open"><span>SQL</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/base/sql.html" aria-current="page" class="active sidebar-link">基本SQL语句</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/base/sql.html#一、数据查询-select" class="sidebar-link">一、数据查询（SELECT）</a></li><li class="sidebar-sub-header"><a href="/base/sql.html#二、多表操作-连接与子查询" class="sidebar-link">二、多表操作（连接与子查询）</a></li><li class="sidebar-sub-header"><a href="/base/sql.html#三、聚合与分组" class="sidebar-link">三、聚合与分组</a></li><li class="sidebar-sub-header"><a href="/base/sql.html#四、数据更新与写入" class="sidebar-link">四、数据更新与写入</a></li><li class="sidebar-sub-header"><a href="/base/sql.html#五、索引与性能优化相关" class="sidebar-link">五、索引与性能优化相关</a></li><li class="sidebar-sub-header"><a href="/base/sql.html#六、事务与锁操作" class="sidebar-link">六、事务与锁操作</a></li><li class="sidebar-sub-header"><a href="/base/sql.html#bonus-面试高频场景题" class="sidebar-link">Bonus：面试高频场景题</a></li></ul></li><li><a href="/base/sql-query-execution.html" class="sidebar-link">一条SQL查询语句是如何执行的？</a></li></ul></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>索引</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>锁与MVCC</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>事务</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>Redis</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>其他</span> <span class="arrow right"></span></p> <!----></section></li></ul></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>计算机组成原理</span> <span class="arrow right"></span></p> <!----></section></li></ul> </aside> <main class="page"> <div class="page-meta-host" style="display:none;"></div> <!----> <div class="theme-default-content content__default"><h1 id="mysql-常考语句分类整理"><a href="#mysql-常考语句分类整理" class="header-anchor">#</a> MySQL 常考语句分类整理</h1> <h2 id="一、数据查询-select"><a href="#一、数据查询-select" class="header-anchor">#</a> 一、数据查询（SELECT）</h2> <table><thead><tr><th>类型</th> <th>示例</th></tr></thead> <tbody><tr><td>基础查询</td> <td><code>SELECT * FROM users;</code></td></tr> <tr><td>指定列</td> <td><code>SELECT id, name FROM users;</code></td></tr> <tr><td>条件查询</td> <td><code>SELECT * FROM users WHERE age &gt; 25;</code></td></tr> <tr><td>排序</td> <td><code>SELECT * FROM users ORDER BY age DESC;</code></td></tr> <tr><td>去重</td> <td><code>SELECT DISTINCT city FROM users;</code></td></tr> <tr><td>分页</td> <td><code>SELECT * FROM users LIMIT 10 OFFSET 20;</code></td></tr> <tr><td>别名</td> <td><code>SELECT name AS username FROM users;</code></td></tr> <tr><td>模糊匹配</td> <td><code>SELECT * FROM users WHERE name LIKE 'A%';</code></td></tr> <tr><td>范围查询</td> <td><code>SELECT * FROM users WHERE age BETWEEN 20 AND 30;</code></td></tr> <tr><td>多条件</td> <td><code>SELECT * FROM users WHERE age &gt; 20 AND city = 'Beijing';</code></td></tr></tbody></table> <hr> <h2 id="二、多表操作-连接与子查询"><a href="#二、多表操作-连接与子查询" class="header-anchor">#</a> 二、多表操作（连接与子查询）</h2> <table><thead><tr><th>类型</th> <th>示例</th></tr></thead> <tbody><tr><td>内连接</td> <td><code>SELECT u.name, o.amount FROM users u JOIN orders o ON u.id = o.user_id;</code></td></tr> <tr><td>左连接</td> <td><code>SELECT u.name, o.amount FROM users u LEFT JOIN orders o ON u.id = o.user_id;</code></td></tr> <tr><td>右连接</td> <td><code>SELECT u.name, o.amount FROM users u RIGHT JOIN orders o ON u.id = o.user_id;</code></td></tr> <tr><td>子查询（WHERE中）</td> <td><code>SELECT name FROM users WHERE id IN (SELECT user_id FROM orders);</code></td></tr> <tr><td>子查询（FROM中）</td> <td><code>SELECT t.user_id, COUNT(*) FROM (SELECT * FROM orders WHERE amount &gt; 100) t GROUP BY t.user_id;</code></td></tr></tbody></table> <hr> <h2 id="三、聚合与分组"><a href="#三、聚合与分组" class="header-anchor">#</a> 三、聚合与分组</h2> <table><thead><tr><th>类型</th> <th>示例</th></tr></thead> <tbody><tr><td>总数</td> <td><code>SELECT COUNT(*) FROM users;</code></td></tr> <tr><td>求和</td> <td><code>SELECT SUM(amount) FROM orders;</code></td></tr> <tr><td>平均值</td> <td><code>SELECT AVG(age) FROM users;</code></td></tr> <tr><td>最大/最小值</td> <td><code>SELECT MAX(age), MIN(age) FROM users;</code></td></tr> <tr><td>分组统计</td> <td><code>SELECT city, COUNT(*) FROM users GROUP BY city;</code></td></tr> <tr><td>分组条件</td> <td><code>SELECT city, COUNT(*) FROM users GROUP BY city HAVING COUNT(*) &gt; 10;</code></td></tr></tbody></table> <hr> <h2 id="四、数据更新与写入"><a href="#四、数据更新与写入" class="header-anchor">#</a> 四、数据更新与写入</h2> <table><thead><tr><th>类型</th> <th>示例</th></tr></thead> <tbody><tr><td>插入</td> <td><code>INSERT INTO users(name, age) VALUES('Alice', 30);</code></td></tr> <tr><td>批量插入</td> <td><code>INSERT INTO users(name, age) VALUES ('Bob', 25), ('Cathy', 22);</code></td></tr> <tr><td>插入或更新</td> <td><code>INSERT INTO users(id, name) VALUES (1, 'Tom') ON DUPLICATE KEY UPDATE name='Tom';</code></td></tr> <tr><td>更新数据</td> <td><code>UPDATE users SET age = 28 WHERE id = 1;</code></td></tr> <tr><td>删除数据</td> <td><code>DELETE FROM users WHERE age &lt; 18;</code></td></tr></tbody></table> <hr> <h2 id="五、索引与性能优化相关"><a href="#五、索引与性能优化相关" class="header-anchor">#</a> 五、索引与性能优化相关</h2> <table><thead><tr><th>类型</th> <th>示例</th></tr></thead> <tbody><tr><td>查看索引</td> <td><code>SHOW INDEX FROM users;</code></td></tr> <tr><td>创建索引</td> <td><code>CREATE INDEX idx_age ON users(age);</code></td></tr> <tr><td>删除索引</td> <td><code>DROP INDEX idx_age ON users;</code></td></tr> <tr><td>使用执行计划</td> <td><code>EXPLAIN SELECT * FROM users WHERE age &gt; 30;</code></td></tr> <tr><td>查看慢查询日志</td> <td><code>SHOW VARIABLES LIKE 'slow_query_log%';</code></td></tr> <tr><td>强制使用索引</td> <td><code>SELECT * FROM users FORCE INDEX (idx_age) WHERE age &gt; 25;</code></td></tr></tbody></table> <hr> <h2 id="六、事务与锁操作"><a href="#六、事务与锁操作" class="header-anchor">#</a> 六、事务与锁操作</h2> <table><thead><tr><th>类型</th> <th>示例</th></tr></thead> <tbody><tr><td>开启事务</td> <td><code>START TRANSACTION;</code> 或 <code>BEGIN;</code></td></tr> <tr><td>提交事务</td> <td><code>COMMIT;</code></td></tr> <tr><td>回滚事务</td> <td><code>ROLLBACK;</code></td></tr> <tr><td>设置隔离级别</td> <td><code>SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;</code></td></tr> <tr><td>查看当前隔离级别</td> <td><code>SELECT @@tx_isolation;</code></td></tr> <tr><td>悲观锁</td> <td><code>SELECT * FROM users WHERE id = 1 FOR UPDATE;</code></td></tr> <tr><td>乐观锁</td> <td><code>UPDATE users SET age = 26, version = version + 1 WHERE id = 1 AND version = 2;</code></td></tr></tbody></table> <hr> <h2 id="bonus-面试高频场景题"><a href="#bonus-面试高频场景题" class="header-anchor">#</a> Bonus：面试高频场景题</h2> <table><thead><tr><th>问题</th> <th>示例</th></tr></thead> <tbody><tr><td>查询每个用户的最后一笔订单</td> <td>使用 <code>GROUP BY</code> + <code>MAX(order_time)</code> 或 <code>子查询 + JOIN</code></td></tr> <tr><td>查询重复数据</td> <td><code>SELECT name, COUNT(*) FROM users GROUP BY name HAVING COUNT(*) &gt; 1;</code></td></tr> <tr><td>查询某字段为空</td> <td><code>SELECT * FROM users WHERE phone IS NULL;</code></td></tr> <tr><td>查询某天注册的用户</td> <td><code>SELECT * FROM users WHERE DATE(register_time) = '2024-01-01';</code></td></tr> <tr><td>分页优化</td> <td><code>SELECT * FROM users WHERE id &gt; ? LIMIT 10;</code> 替代 OFFSET</td></tr></tbody></table></div> <footer class="page-edit"><!----> <div class="last-updated"><span class="prefix">Last Updated:</span> <span class="time">5/25/2026, 3:50:35 PM</span></div></footer> <div class="page-nav"><p class="inner"><span class="prev">
+      ←
+      <a href="/base/url-to-page-rendering.html" class="prev">
+        从输入URL到页面展示发生了什么
+      </a></span> <span class="next"><a href="/base/sql-query-execution.html">
+        一条SQL查询语句是如何执行的？
+      </a>
+      →
+    </span></p></div>  <div class="comments-wrapper" data-v-558649bb><div class="comments-header" data-v-558649bb><h3 class="comments-title" data-v-558649bb>评论</h3> <!----></div> <div class="comments-loading" data-v-558649bb><p data-v-558649bb>验证登录状态...</p></div> <!----> <!----> <!----></div></main> <aside class="page-sidebar"> <div class="page-side-toolbar"><div class="option-box"><img src="/images/system/toggle.png" width="30px" alt="侧边栏" class="nozoom"> <span class="show-txt">侧边栏</span></div> <div class="option-box"><img src="/images/system/dark.svg" width="30px" alt="夜间模式" class="nozoom"> <span class="show-txt">夜间</span></div> <div class="option-box"><a href="https://jianli.kamacoder.com/" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/2025-08-14kamajianli.jpg" width="25px" alt="卡码简历" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码简历</span></a></div> <div class="option-box"><a href="https://programmercarl.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/代码随想录.jpg" width="25px" alt="代码随想录" class="nozoom"> <span class="show-txt" style="margin-top: 5px">代码随想录</span></a></div> <div class="option-box"><a href="https://toudi.kamacoder.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/卡码投递表.jpg" width="25px" alt="卡码投递表" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码投递表🔥</span></a></div> <div class="option-box"><img src="/images/system/实习校招202503.png" width="25px" alt="2026实习校招群" class="nozoom"> <span class="show-txt">2026群</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">添加客服微信</span> <img src="/assets/img/26校招.5e9d30da.jpg" height="180px" alt="2026实习校招客服微信" style="margin: 10px">
+            PS：通过微信后，请发送<b>姓名-学校-年级-2026实习/校招</b></div></div></div></div> <div class="option-box"><img src="/images/system/red-heart.png" width="25px" alt="支持卡码笔记" class="nozoom"> <span class="show-txt">支持卡码笔记</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">鼓励/支持/赞赏Carl</span> <img height="180px" src="/assets/img/网站赞赏.69fb25a5.jpg" alt="卡码笔记赞赏码" style="margin: 5px"> <br>1.
+            如果感觉本站对你很有帮助，也可以请Carl喝杯奶茶，金额大小不重要，心意已经收下
+            <br>2. 希望大家都能梦想成真，有好的前程，加油💪
+          </div></div></div></div></div>  </aside></div><div class="global-ui"><!----></div></div>
+    <script src="/assets/js/app.9998fd5e.js" defer></script><script src="/assets/js/2.a7b01108.js" defer></script><script src="/assets/js/1.86f1b283.js" defer></script><script src="/assets/js/95.e8f686b3.js" defer></script>
+  </body>
+</html>

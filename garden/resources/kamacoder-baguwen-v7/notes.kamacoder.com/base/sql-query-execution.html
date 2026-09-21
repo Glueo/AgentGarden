@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>一条SQL查询语句是如何执行的？｜大厂面试题｜数据库高频面试题｜MySQL、执行流程、优化器、InnoDB | 卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文</title>
+    <meta name="generator" content="VuePress 1.9.10">
+    <link rel="icon" href="https://file1.kamacoder.com/i/web/2025-08-14kamabij.jpg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script>
+      var _hmt = _hmt || [];
+      (function() {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?2ea20ae8da307f7b54137ae9b4fc95b0";
+        var s = document.getElementsByTagName("script")[0]; 
+        s.parentNode.insertBefore(hm, s);
+      })();
+       // 统计每个页面的UV、PV，核心：监听 VuePress 路由变化，主动上报页面访问
+      document.addEventListener('vuepress:routeChanged', () => {
+        if (window._hmt) {
+          _hmt.push(['_trackPageview', window.location.pathname + window.location.hash]);
+        }
+      });
+    </script>
+    <meta name="description" content="一条SQL查询语句在MySQL中的执行流程是数据库面试高频考点，涉及连接器、查询缓存（MySQL 8.0前）、解析器、优化器、执行器与存储引擎（如InnoDB）的协同工作。本文详解从建立连接、语法解析、生成执行计划到数据读取与返回的完整过程，并解答为何MySQL 8.0移除查询缓存、优化器如何选择索引以及如何分析慢SQL等大厂面试常见追问。">
+    <meta property="article:modified_time" content="2026-03-10T10:08:48.000Z">
+    <meta property="og:site_name" content="卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文">
+    <meta property="og:title" content="一条SQL查询语句是如何执行的？｜大厂面试题｜数据库高频面试题｜MySQL、执行流程、优化器、InnoDB">
+    <meta property="og:description" content="一条SQL查询语句在MySQL中的执行流程是数据库面试高频考点，涉及连接器、查询缓存（MySQL 8.0前）、解析器、优化器、执行器与存储引擎（如InnoDB）的协同工作。本文详解从建立连接、语法解析、生成执行计划到数据读取与返回的完整过程，并解答为何MySQL 8.0移除查询缓存、优化器如何选择索引以及如何分析慢SQL等大厂面试常见追问。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="/base/sql-query-execution.html">
+    <meta name="twitter:title" content="一条SQL查询语句是如何执行的？｜大厂面试题｜数据库高频面试题｜MySQL、执行流程、优化器、InnoDB">
+    <meta name="twitter:description" content="一条SQL查询语句在MySQL中的执行流程是数据库面试高频考点，涉及连接器、查询缓存（MySQL 8.0前）、解析器、优化器、执行器与存储引擎（如InnoDB）的协同工作。本文详解从建立连接、语法解析、生成执行计划到数据读取与返回的完整过程，并解答为何MySQL 8.0移除查询缓存、优化器如何选择索引以及如何分析慢SQL等大厂面试常见追问。">
+    <meta name="twitter:url" content="/base/sql-query-execution.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:label2" content="Filed under">
+    <meta name="twitter:data2" content="大厂面试题, 数据库, 面试题, 高频考点, MySQL, SQL">
+    <meta property="article:tag" content="大厂面试题">
+    <meta name="keywords" content="SQL查询执行流程,MySQL执行过程,一条SQL语句如何执行,SQL查询面试题,数据库面试题,大厂面试题,高频面试题,MySQL连接器,MySQL优化器,InnoDB存储引擎,查询缓存,EXPLAIN执行计划,慢SQL分析,索引选择">
+    <meta name="tags" content="大厂面试题,数据库,面试题,高频考点,MySQL,SQL">
+    <meta name="theme-color" content="#3eaf7c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
+    <link rel="preload" href="/assets/css/0.styles.88f5c8c7.css" as="style"><link rel="preload" href="/assets/js/app.9998fd5e.js" as="script"><link rel="preload" href="/assets/js/2.a7b01108.js" as="script"><link rel="preload" href="/assets/js/1.86f1b283.js" as="script"><link rel="preload" href="/assets/js/94.1fcf3396.js" as="script">
+    <link rel="stylesheet" href="/assets/css/0.styles.88f5c8c7.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container sidebar-open"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/" class="home-link router-link-active"><!----> <span class="site-name">卡码笔记-最强八股文</span></a> <div class="links"><!----> <nav class="nav-links can-hide"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav>  <ul class="sidebar-links"><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>操作系统</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>网络</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading open"><span>数据库</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading open"><span>SQL</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/base/sql.html" class="sidebar-link">基本SQL语句</a></li><li><a href="/base/sql-query-execution.html" aria-current="page" class="active sidebar-link">一条SQL查询语句是如何执行的？</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/base/sql-query-execution.html#简要回答" class="sidebar-link">简要回答</a></li><li class="sidebar-sub-header"><a href="/base/sql-query-execution.html#详细回答" class="sidebar-link">详细回答</a></li><li class="sidebar-sub-header"><a href="/base/sql-query-execution.html#知识拓展" class="sidebar-link">知识拓展</a></li></ul></li></ul></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>索引</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>锁与MVCC</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>事务</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>Redis</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>其他</span> <span class="arrow right"></span></p> <!----></section></li></ul></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>计算机组成原理</span> <span class="arrow right"></span></p> <!----></section></li></ul> </aside> <main class="page"> <div class="page-meta-host" style="display:none;"></div> <!----> <div class="theme-default-content content__default"><h1 id="一条sql查询语句是如何执行的"><a href="#一条sql查询语句是如何执行的" class="header-anchor">#</a> 一条SQL查询语句是如何执行的？</h1> <h2 id="简要回答"><a href="#简要回答" class="header-anchor">#</a> 简要回答</h2> <ol><li><strong>连接阶段</strong>：由服务器端的<strong>连接器</strong>组件负责，在客户端与 MySQL 服务器之间建立连接，并验证用户权限。</li> <li><strong>查询缓存</strong>（仅限 MySQL 8.0 前）：检查<strong>是否命中缓存</strong>，若有完全相同且有效的查询结果可以直接返回。</li> <li><strong>解析与预处理</strong>：解析 SQL 语法，检查语法是否正确，并生成抽象语法树，然后，<strong>预处理器</strong>进行一些语义检查，验证表和字段是否存在。</li> <li><strong>优化器</strong>：基于统计信息和成本模型，考虑多种执行方案，并选择最优执行计划（如索引选择、JOIN 顺序）。</li> <li><strong>执行器</strong>：根据选择的执行计划，调用存储引擎接口，并按执行计划读取数据并处理（排序、聚合等）。</li> <li><strong>存储引擎</strong>（如 InnoDB）：负责从磁盘或内存读取数据，返回给执行器。</li> <li><strong>返回结果</strong>：执行器进行必要的处理（如过滤、排序）后，将结果集返回客户端，可能分批次传输。</li></ol> <h2 id="详细回答"><a href="#详细回答" class="header-anchor">#</a> 详细回答</h2> <ol><li><strong>连接阶段</strong>：
+<ul><li>当我们在<strong>客户端</strong>（如命令行工具、应用程序）输入并执行一条 SQL 查询时，首先需要与<strong>数据库服务器</strong>建立一个网络连接。</li> <li>这个过程包括 <strong>TCP/IP 协议</strong>的三次握手，以及<strong>数据库层面的认证</strong>，比如验证用户名和密码。</li> <li>连接成功后，服务器会为这个连接分配一个<strong>独立的线程</strong>来处理后续的请求。</li></ul></li> <li><strong>查询缓存（MySQL 8.0 前）</strong>：
+<ul><li>服务器接收到 SQL 语句后，会先检查 查询缓存。这是一个位于<strong>内存中</strong>的区域，存储了之前执行过的查询语句及其结果。</li> <li>如果当前查询与缓存中的某个查询<strong>完全一致</strong>（包括 SQL 语句本身、连接的数据库、客户端的协议版本等），并且缓存<strong>仍然有效</strong>（比如涉及的表没有被修改），那么服务器会直接从缓存中返回结果，无需执行后续的解析、优化和执行过程。</li> <li><strong>需要注意的是，在 MySQL 8.0 及更高版本中，查询缓存功能已经被移除。</strong> 这是因为在并发写入场景下，查询缓存的维护成本很高，容易成为性能瓶颈。因此，在现代数据库系统中，通常不再依赖查询缓存进行优化。</li></ul></li> <li><strong>解析与预处理</strong>：
+<ul><li>如果查询缓存未命中，服务器会将 SQL 查询语句发送给解析器。<strong>解析器</strong>会对 SQL 语句进行<strong>词法分析</strong>（将语句分解成一个个词法单元，如关键字、标识符、操作符等） 和 <strong>语法分析</strong>（根据 SQL 语法规则检查语句是否合法，生成一个抽象语法树 AST）。</li> <li>如果语法有错误，<strong>解析器</strong>会直接返回错误信息。如果语法没问题，<strong>预处理器</strong>根据抽象语法树，进一步检查 SQL 语句的合法性，例如，检查表名、字段名是否存在，是否有权限执行该查询等，它还会进行一些语义上的检查和转换。</li></ul></li> <li><strong>优化器</strong>：
+<ul><li>优化器的目标是找到执行查询的<strong>最优执行计划</strong>。它会考虑多种可能的执行方式，并<strong>评估</strong>它们的<strong>成本</strong>（如 I/O 次数、CPU 消耗等）。</li> <li>优化器会利用<strong>统计信息</strong>（如表的大小、索引的选择性等）来做出决策。</li> <li><strong>常见的优化策略包括</strong>：<br>
+① 选择合适的索引。<br>
+② 决定表的连接顺序。<br>
+③ 选择合适的连接算法（如嵌套循环连接、哈希连接、合并排序连接）。<br>
+④ 改写查询语句，使其更高效。</li> <li>最终，优化器会生成一个最优的<strong>执行计划</strong>（Execution Plan），它描述了如何执行查询的步骤。</li></ul></li> <li><strong>执行器</strong>：
+<ul><li>执行器根据优化器生成的执行计划，<strong>调用存储引擎的接口</strong>来执行查询。</li> <li>执行器会按照执行计划的步骤，<strong>从存储引擎获取数据</strong>，进行过滤、排序、连接等操作。例如，如果执行计划指示使用某个索引进行查找，执行器就会调用存储引擎的索引查找接口。</li> <li>执行器会逐步处理数据，并将结果返回给客户端。</li></ul></li> <li><strong>存储引擎（以 InnoDB 为例）</strong>：
+<ul><li>存储引擎是数据库系统中负责<strong>数据存储和检索</strong>的核心组件。不同的存储引擎有不同的特点和优势（如 InnoDB、MyISAM 等）。</li> <li>执行器通过存储引擎的 API 来访问和操作数据文件。</li> <li>存储引擎负责数据的读取、写入、更新、删除以及事务管理、锁机制等。</li></ul></li> <li><strong>返回结果</strong>：
+<ul><li>执行器将最终的查询结果返回给客户端。</li> <li>客户端应用程序接收到结果后，可以进行进一步的处理和展示。</li></ul></li></ol> <h2 id="知识拓展"><a href="#知识拓展" class="header-anchor">#</a> 知识拓展</h2> <ol><li><strong>MySQL执行一条SQL查询语句的流程示意图（以MySQL8.0为例）</strong>，如下所示：<br> <img src="https://file1.kamacoder.com/i/bagu/SQL_execution_order.jpg" alt="image"></li> <li><strong>面试官可能的追问1—为什么 MySQL 8.0 移除了查询缓存？</strong> <ul><li><strong>答</strong>：缓存失效频繁（表更新即失效），维护成本高且命中率低。现代优化器能生成更高效执行计划，且应用层缓存（如 Redis）更灵活。</li></ul></li> <li><strong>面试官可能的追问2—优化器如何决定使用某个索引？</strong> <ul><li><strong>答</strong>：基于索引的选择性（唯一性）、统计信息（基数）和查询条件。可通过 <code>EXPLAIN</code> 查看 <code>possible_keys</code> 和 <code>key</code> 字段。</li></ul></li> <li><strong>面试官可能的追问3—如何分析一条慢 SQL 的执行瓶颈？</strong> <ul><li><strong>答</strong>：<br>
+① 使用 <code>EXPLAIN</code> 查看执行计划（索引使用、扫描行数）。<br>
+② 开启慢查询日志（<code>slow_query_log</code>）捕获耗时操作。<br>
+③ 检查锁竞争（<code>SHOW ENGINE INNODB STATUS</code>）。</li></ul></li></ol></div> <footer class="page-edit"><!----> <div class="last-updated"><span class="prefix">Last Updated:</span> <span class="time">3/10/2026, 6:08:48 PM</span></div></footer> <div class="page-nav"><p class="inner"><span class="prev">
+      ←
+      <a href="/base/sql.html" class="prev">
+        基本SQL语句
+      </a></span> <span class="next"><a href="/base/index-types.html">
+        索引有哪些种类？
+      </a>
+      →
+    </span></p></div>  <div class="comments-wrapper" data-v-558649bb><div class="comments-header" data-v-558649bb><h3 class="comments-title" data-v-558649bb>评论</h3> <!----></div> <div class="comments-loading" data-v-558649bb><p data-v-558649bb>验证登录状态...</p></div> <!----> <!----> <!----></div></main> <aside class="page-sidebar"> <div class="page-side-toolbar"><div class="option-box"><img src="/images/system/toggle.png" width="30px" alt="侧边栏" class="nozoom"> <span class="show-txt">侧边栏</span></div> <div class="option-box"><img src="/images/system/dark.svg" width="30px" alt="夜间模式" class="nozoom"> <span class="show-txt">夜间</span></div> <div class="option-box"><a href="https://jianli.kamacoder.com/" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/2025-08-14kamajianli.jpg" width="25px" alt="卡码简历" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码简历</span></a></div> <div class="option-box"><a href="https://programmercarl.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/代码随想录.jpg" width="25px" alt="代码随想录" class="nozoom"> <span class="show-txt" style="margin-top: 5px">代码随想录</span></a></div> <div class="option-box"><a href="https://toudi.kamacoder.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/卡码投递表.jpg" width="25px" alt="卡码投递表" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码投递表🔥</span></a></div> <div class="option-box"><img src="/images/system/实习校招202503.png" width="25px" alt="2026实习校招群" class="nozoom"> <span class="show-txt">2026群</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">添加客服微信</span> <img src="/assets/img/26校招.5e9d30da.jpg" height="180px" alt="2026实习校招客服微信" style="margin: 10px">
+            PS：通过微信后，请发送<b>姓名-学校-年级-2026实习/校招</b></div></div></div></div> <div class="option-box"><img src="/images/system/red-heart.png" width="25px" alt="支持卡码笔记" class="nozoom"> <span class="show-txt">支持卡码笔记</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">鼓励/支持/赞赏Carl</span> <img height="180px" src="/assets/img/网站赞赏.69fb25a5.jpg" alt="卡码笔记赞赏码" style="margin: 5px"> <br>1.
+            如果感觉本站对你很有帮助，也可以请Carl喝杯奶茶，金额大小不重要，心意已经收下
+            <br>2. 希望大家都能梦想成真，有好的前程，加油💪
+          </div></div></div></div></div>  </aside></div><div class="global-ui"><!----></div></div>
+    <script src="/assets/js/app.9998fd5e.js" defer></script><script src="/assets/js/2.a7b01108.js" defer></script><script src="/assets/js/1.86f1b283.js" defer></script><script src="/assets/js/94.1fcf3396.js" defer></script>
+  </body>
+</html>

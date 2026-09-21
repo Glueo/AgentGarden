@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Redis的布隆过滤器是什么？ | 卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文</title>
+    <meta name="generator" content="VuePress 1.9.10">
+    <link rel="icon" href="https://file1.kamacoder.com/i/web/2025-08-14kamabij.jpg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script>
+      var _hmt = _hmt || [];
+      (function() {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?2ea20ae8da307f7b54137ae9b4fc95b0";
+        var s = document.getElementsByTagName("script")[0]; 
+        s.parentNode.insertBefore(hm, s);
+      })();
+       // 统计每个页面的UV、PV，核心：监听 VuePress 路由变化，主动上报页面访问
+      document.addEventListener('vuepress:routeChanged', () => {
+        if (window._hmt) {
+          _hmt.push(['_trackPageview', window.location.pathname + window.location.hash]);
+        }
+      });
+    </script>
+    <meta name="description" content="Redis布隆过滤器详解，讲清位数组加多个哈希函数的底层原理、可能存在与一定不存在的判断逻辑、误判率和空间占用如何权衡，以及在缓存穿透、防重复提交、海量去重系统中的应用场景，整理Redis面试常见追问、回答思路、项目落地注意点、删除限制和误判处理。">
+    <meta property="article:modified_time" content="2026-05-25T07:50:35.000Z">
+    <meta property="og:site_name" content="卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文">
+    <meta property="og:title" content="Redis的布隆过滤器是什么？">
+    <meta property="og:description" content="Redis布隆过滤器详解，讲清位数组加多个哈希函数的底层原理、可能存在与一定不存在的判断逻辑、误判率和空间占用如何权衡，以及在缓存穿透、防重复提交、海量去重系统中的应用场景，整理Redis面试常见追问、回答思路、项目落地注意点、删除限制和误判处理。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="/base/redis-bloom-filter.html">
+    <meta name="twitter:title" content="Redis的布隆过滤器是什么？">
+    <meta name="twitter:description" content="Redis布隆过滤器详解，讲清位数组加多个哈希函数的底层原理、可能存在与一定不存在的判断逻辑、误判率和空间占用如何权衡，以及在缓存穿透、防重复提交、海量去重系统中的应用场景，整理Redis面试常见追问、回答思路、项目落地注意点、删除限制和误判处理。">
+    <meta name="twitter:url" content="/base/redis-bloom-filter.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:label2" content="Filed under">
+    <meta name="twitter:data2" content="Redis, 数据库面试题, 八股文">
+    <meta property="article:tag" content="Redis">
+    <meta name="keywords" content="Redis布隆过滤器,Bloom Filter,缓存穿透,Redis面试题,Redis八股文">
+    <meta name="tags" content="Redis,数据库面试题,八股文">
+    <meta name="theme-color" content="#3eaf7c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
+    <link rel="preload" href="/assets/css/0.styles.88f5c8c7.css" as="style"><link rel="preload" href="/assets/js/app.9998fd5e.js" as="script"><link rel="preload" href="/assets/js/2.a7b01108.js" as="script"><link rel="preload" href="/assets/js/1.86f1b283.js" as="script"><link rel="preload" href="/assets/js/84.29d61ca0.js" as="script">
+    <link rel="stylesheet" href="/assets/css/0.styles.88f5c8c7.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container sidebar-open"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/" class="home-link router-link-active"><!----> <span class="site-name">卡码笔记-最强八股文</span></a> <div class="links"><!----> <nav class="nav-links can-hide"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav>  <ul class="sidebar-links"><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>操作系统</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>网络</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading open"><span>数据库</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>SQL</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>索引</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>锁与MVCC</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>事务</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading open"><span>Redis</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/base/redis-data-structures.html" class="sidebar-link">Redis常见的数据结构</a></li><li><a href="/base/redis-cache-eviction.html" class="sidebar-link">Redis缓存淘汰策略</a></li><li><a href="/base/redis-expiration-policies.html" class="sidebar-link">Redis过期策略</a></li><li><a href="/base/redis-persistence-rdb-aof.html" class="sidebar-link">Redis持久化机制：RDB和AOF</a></li><li><a href="/base/redis-cache-stampeding-penetration-avalanche.html" class="sidebar-link">缓存雪崩、穿透、击穿</a></li><li><a href="/base/redis-distributed-lock.html" class="sidebar-link">Redis分布式锁</a></li><li><a href="/base/redis-bloom-filter.html" aria-current="page" class="active sidebar-link">Redis布隆过滤器</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/base/redis-bloom-filter.html#简要回答" class="sidebar-link">简要回答</a></li><li class="sidebar-sub-header"><a href="/base/redis-bloom-filter.html#详细回答" class="sidebar-link">详细回答</a></li><li class="sidebar-sub-header"><a href="/base/redis-bloom-filter.html#知识图解" class="sidebar-link">知识图解</a></li><li class="sidebar-sub-header"><a href="/base/redis-bloom-filter.html#代码示例" class="sidebar-link">代码示例</a></li><li class="sidebar-sub-header"><a href="/base/redis-bloom-filter.html#知识扩展" class="sidebar-link">知识扩展</a></li></ul></li><li><a href="/base/redis-master-slave-synchronization.html" class="sidebar-link">Redis主从同步</a></li></ul></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>其他</span> <span class="arrow right"></span></p> <!----></section></li></ul></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>计算机组成原理</span> <span class="arrow right"></span></p> <!----></section></li></ul> </aside> <main class="page"> <div class="page-meta-host" style="display:none;"></div> <!----> <div class="theme-default-content content__default"><h1 id="redis的布隆过滤器是什么"><a href="#redis的布隆过滤器是什么" class="header-anchor">#</a> Redis的布隆过滤器是什么？</h1> <h2 id="简要回答"><a href="#简要回答" class="header-anchor">#</a> 简要回答</h2> <ul><li>布隆过滤器（Bloom Filter）是一种<strong>高空间效率的概率型数据结构</strong>，用来判断一个元素“<strong>可能存在</strong>”或者“<strong>一定不存在</strong>”。它的底层核心是<strong>位数组 + 多个哈希函数</strong>。</li> <li>它能够在海量数据场景下，占用很小的内存，且查询速度很快；缺点是<strong>可能会误判元素存在，但不会误判不存在</strong>，而且普通布隆过滤器<strong>不支持直接删除</strong>。</li> <li>在 Redis 场景里，布隆过滤器最常见的用途是<strong>防缓存穿透</strong>。请求进来时先过布隆过滤器，如果判断“一定不存在”，就直接拦截，不再访问 Redis 和数据库。</li></ul> <h2 id="详细回答"><a href="#详细回答" class="header-anchor">#</a> 详细回答</h2> <ol><li>布隆过滤器
+<ul><li>布隆过滤器本质上不是拿来“存完整数据”的，而是拿来做<strong>存在性判断</strong>的。它适合回答某个用户 ID、商品 ID、订单号，是否可能在指定数据集合里。所以它常常作为缓存层、数据库层之前的一道“预过滤”。</li></ul></li> <li>布隆过滤器工作流程
+<ul><li>假设有一个长度为 <code>m</code> 的位数组，初始时所有 bit 都是 <code>0</code>，再准备 <code>k</code> 个不同的哈希函数。</li> <li><strong>插入元素</strong>时：先对元素执行 <code>k</code> 次哈希计算，得到 <code>k</code> 个位置后，把这些位置上的 bit 都置为 <code>1</code>。</li> <li><strong>查询元素</strong>时：同样做 <code>k</code> 次哈希计算，只要有一个位置是 <code>0</code>，就说明这个元素<strong>一定不存在</strong>。如果所有位置都是 <code>1</code>，说明它<strong>可能存在</strong>，因为这些 bit 也可能是别的元素碰巧打上的。</li></ul></li> <li>布隆过滤器的特点
+<ul><li>**优点：**内存占用非常小，适合海量 key。查询和插入都很快，本质上是位运算。很适合放在请求入口做快速拦截。</li> <li><strong>缺点：<strong>有</strong>误判率</strong>，即“不存在的元素也可能被判断为存在”。且普通布隆过滤器没有直接删除能力，因为多个元素可能共用同一个 bit。</li></ul></li> <li>布隆过滤器典型应用
+<ul><li>缓存穿透是外部不断请求一些根本不存在的 key，这些请求既打不到缓存，也查不到数据库，最终把数据库打满。</li> <li>引入布隆过滤器后，请求先判断这个 key 是否“可能存在”：如果布隆过滤器判定<strong>一定不存在</strong>，就直接返回，不再查 Redis 和数据库。如果判定<strong>可能存在</strong>，再继续走缓存和数据库查询链路，这样就把大量本来就无效的请求挡在更前面了。</li></ul></li> <li>Redis 里实现布隆过滤器有两种常见方式：
+1. <strong>RedisBloom 模块</strong>：直接用 <code>BF.ADD</code>、<code>BF.EXISTS</code> 这类命令，使用成本最低。
+2. <strong>基于 Bitmap 自己实现</strong>：自己维护位图和多个哈希函数，灵活但实现复杂度更高。
+<ul><li>如果团队已经用了 Redis 模块生态，RedisBloom 通常更省事；如果环境不方便安装模块，才会考虑基于 Bitmap 手工实现。</li></ul></li> <li>使用布隆过滤器时需要注意，布隆过滤器要根据预计元素个数和可接受误判率来初始化，否则后期误判率会明显上升；不能只建过滤器不灌数据。一般需要把数据库里的已有 key 先批量导入进去；新增数据时要同步写入布隆过滤器；如果有大量删除需求，普通布隆过滤器就不太适合了。</li> <li>实际开发中，对<strong>海量 ID 查询场景</strong>，布隆过滤器很适合做第一层预过滤。对<strong>普通小规模业务</strong>，直接用“参数校验 + 缓存空值”可能已经够了，没必要引入额外复杂度。很多时候可以组合使用<strong>参数校验 + 布隆过滤器 + 缓存空值</strong> 。</li></ol> <h2 id="知识图解"><a href="#知识图解" class="header-anchor">#</a> 知识图解</h2> <ol><li>布隆过滤器的判断结果</li></ol> <table><thead><tr><th>判断结果</th> <th>含义</th> <th>能否直接当最终结果</th></tr></thead> <tbody><tr><td>某一位为 <code>0</code></td> <td>这个元素一定不存在</td> <td>可以直接拦截</td></tr> <tr><td>所有位都为 <code>1</code></td> <td>这个元素可能存在</td> <td>不行，还要继续查缓存或数据库</td></tr></tbody></table> <ol start="2"><li>布隆过滤器和缓存空值对比</li></ol> <table><thead><tr><th>方案</th> <th>优点</th> <th>缺点</th> <th>适用场景</th></tr></thead> <tbody><tr><td>布隆过滤器</td> <td>节省内存，适合海量 key</td> <td>有误判，不适合频繁删除</td> <td>海量 key 防穿透</td></tr> <tr><td>缓存空值</td> <td>实现简单，接入快</td> <td>占缓存空间，存在短时不一致</td> <td>普通业务场景</td></tr></tbody></table> <ol start="3"><li>布隆过滤器示意图</li></ol> <p><img src="https://file1.kamacoder.com/i/bagu/20260412_Redis%E5%B8%83%E9%9A%86%E8%BF%87%E6%BB%A4%E5%99%A8.jpg" alt="Redis布隆过滤器位数组和哈希函数原理图"></p> <h2 id="代码示例"><a href="#代码示例" class="header-anchor">#</a> 代码示例</h2> <div class="language-plain line-numbers-mode"><pre class="language-plain"><code>
+# 创建一个预计容纳 100 万元素、误判率 1% 的布隆过滤器
+BF.RESERVE user:id:bf 0.01 1000000
+
+# 新增元素
+BF.ADD user:id:bf 1001
+BF.MADD user:id:bf 1002 1003 1004
+
+# 判断元素是否可能存在
+BF.EXISTS user:id:bf 1001
+BF.EXISTS user:id:bf 9999999
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br></div></div><h2 id="知识扩展"><a href="#知识扩展" class="header-anchor">#</a> 知识扩展</h2> <ol><li>面试官可能追问：</li></ol> <ul><li><u>Q1</u>：布隆过滤器为什么会误判，但不会漏判？
+<ul><li>因为多个元素可能把同一批 bit 置为 <code>1</code>，导致一个原本不存在的元素查询时“刚好所有位都是 1”；但如果某一位是 <code>0</code>，说明这个元素一定从来没插入过，所以不会把存在的元素误判成不存在。</li></ul></li> <li><u>Q2</u>：普通布隆过滤器为什么不方便删除？
+<ul><li>因为一个 bit 可能同时被多个元素共用。你删除一个元素时，如果直接把某个位清零，可能会影响其他元素的判断结果。</li></ul></li> <li><u>Q3</u>：用了布隆过滤器，是不是就不需要缓存空值了？
+<ul><li>不一定。布隆过滤器适合拦截大规模不存在 key，但它有误判；缓存空值适合挡住已经打到业务层的无效查询，很多时候两者是配合使用的。</li></ul></li> <li><u>Q4</u>：如果数据量持续增长，布隆过滤器会怎样？
+<ul><li>当实际元素数量明显超过设计容量后，误判率会升高。所以要么预留容量，要么做分片、扩容或重建。</li></ul></li></ul></div> <footer class="page-edit"><!----> <div class="last-updated"><span class="prefix">Last Updated:</span> <span class="time">5/25/2026, 3:50:35 PM</span></div></footer> <div class="page-nav"><p class="inner"><span class="prev">
+      ←
+      <a href="/base/redis-distributed-lock.html" class="prev">
+        Redis分布式锁
+      </a></span> <span class="next"><a href="/base/redis-master-slave-synchronization.html">
+        Redis主从同步
+      </a>
+      →
+    </span></p></div>  <div class="comments-wrapper" data-v-558649bb><div class="comments-header" data-v-558649bb><h3 class="comments-title" data-v-558649bb>评论</h3> <!----></div> <div class="comments-loading" data-v-558649bb><p data-v-558649bb>验证登录状态...</p></div> <!----> <!----> <!----></div></main> <aside class="page-sidebar"> <div class="page-side-toolbar"><div class="option-box"><img src="/images/system/toggle.png" width="30px" alt="侧边栏" class="nozoom"> <span class="show-txt">侧边栏</span></div> <div class="option-box"><img src="/images/system/dark.svg" width="30px" alt="夜间模式" class="nozoom"> <span class="show-txt">夜间</span></div> <div class="option-box"><a href="https://jianli.kamacoder.com/" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/2025-08-14kamajianli.jpg" width="25px" alt="卡码简历" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码简历</span></a></div> <div class="option-box"><a href="https://programmercarl.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/代码随想录.jpg" width="25px" alt="代码随想录" class="nozoom"> <span class="show-txt" style="margin-top: 5px">代码随想录</span></a></div> <div class="option-box"><a href="https://toudi.kamacoder.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/卡码投递表.jpg" width="25px" alt="卡码投递表" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码投递表🔥</span></a></div> <div class="option-box"><img src="/images/system/实习校招202503.png" width="25px" alt="2026实习校招群" class="nozoom"> <span class="show-txt">2026群</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">添加客服微信</span> <img src="/assets/img/26校招.5e9d30da.jpg" height="180px" alt="2026实习校招客服微信" style="margin: 10px">
+            PS：通过微信后，请发送<b>姓名-学校-年级-2026实习/校招</b></div></div></div></div> <div class="option-box"><img src="/images/system/red-heart.png" width="25px" alt="支持卡码笔记" class="nozoom"> <span class="show-txt">支持卡码笔记</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">鼓励/支持/赞赏Carl</span> <img height="180px" src="/assets/img/网站赞赏.69fb25a5.jpg" alt="卡码笔记赞赏码" style="margin: 5px"> <br>1.
+            如果感觉本站对你很有帮助，也可以请Carl喝杯奶茶，金额大小不重要，心意已经收下
+            <br>2. 希望大家都能梦想成真，有好的前程，加油💪
+          </div></div></div></div></div>  </aside></div><div class="global-ui"><!----></div></div>
+    <script src="/assets/js/app.9998fd5e.js" defer></script><script src="/assets/js/2.a7b01108.js" defer></script><script src="/assets/js/1.86f1b283.js" defer></script><script src="/assets/js/84.29d61ca0.js" defer></script>
+  </body>
+</html>

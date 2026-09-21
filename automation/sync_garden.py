@@ -18,12 +18,13 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlencode
 
 from openviking import SyncHTTPClient
+from openviking.parse.parsers.html import HTMLParser as OpenVikingHTMLParser
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 GARDEN_ROOT = PROJECT_ROOT / "garden"
 MANIFEST_PATH = PROJECT_ROOT / ".runtime/sync-manifest.json"
 PENDING_SNAPSHOT_PATH = PROJECT_ROOT / ".runtime/sync-snapshot-pending.json"
-SYNC_ROOTS = ("wiki", "sources")
+SYNC_ROOTS = ("wiki", "resources")
 BASE_URI = os.environ.get("AGENT_GARDEN_VIKING_ROOT", "viking://user/gwen/resources/garden")
 TEXT_SUFFIXES = {".md", ".txt", ".py", ".json", ".yaml", ".yml", ".toml", ".csv", ".tsv", ".sh", ".zsh", ".js", ".ts", ".html", ".css"}
 SNAPSHOT_AMBIGUOUS_STATUS = (502, 503, 504)
@@ -475,8 +476,58 @@ def remote_content_matches(local: bytes, remote: bytes | None, *, text: bool) ->
     if remote is None:
         return False
     if text:
-        return canonical_markdown_bytes(local) == canonical_markdown_bytes(remote)
+        # OpenViking normalizes trailing whitespace on ingest; compare canonical
+        # bodies modulo trailing whitespace so a lone trailing newline does not
+        # force a perpetual re-upload.
+        return canonical_markdown_bytes(local).rstrip() == canonical_markdown_bytes(remote).rstrip()
     return local == remote
+
+
+def remote_resource_is_parsed_tree(client, uri: str) -> bool:
+    """Detect a source file that OpenViking materialized as a parsed directory."""
+    try:
+        result = client.stat(uri)
+    except Exception:
+        return False
+    return isinstance(result, dict) and result.get("isDir") is True
+
+
+def remote_parsed_tree_bytes(client, uri: str) -> bytes | None:
+    """Read the single parsed document child, failing closed on ambiguity."""
+    try:
+        entries = client.ls(uri, recursive=True, output="original")
+    except Exception:
+        return None
+    if not isinstance(entries, list) or not entries:
+        return None
+    contents: list[bytes] = []
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("isDir"), bool):
+            return None
+        try:
+            child_uri = checked_readback_child_uri(uri, entry.get("uri"))
+        except (ValueError, UnicodeError):
+            return None
+        if entry["isDir"]:
+            continue
+        content = remote_bytes(client, child_uri, resource_uri=uri)
+        if content is None:
+            return None
+        contents.append(content)
+    return contents[0] if len(contents) == 1 else None
+
+
+def parsed_html_matches(local_html: bytes, parsed_content: bytes) -> bool:
+    """Reproduce OpenViking's HTML conversion and require exact readback."""
+    try:
+        local_text = local_html.decode("utf-8")
+    except UnicodeError:
+        return False
+    try:
+        expected = OpenVikingHTMLParser()._html_to_markdown(local_text, base_url="")
+    except Exception:
+        return False
+    return bool(expected) and expected.encode("utf-8") == parsed_content
 
 
 def verified_content(client, relative: str, entry: dict, read_local) -> bool:
@@ -484,8 +535,22 @@ def verified_content(client, relative: str, entry: dict, read_local) -> bool:
     expected = read_local(relative)
     if hash_bytes(expected) != entry["sha256"]:
         raise ValueError("local source changed while operation was pending")
-    actual = remote_resource_bytes(client, entry["uri"], Path(relative).name)
-    if not remote_content_matches(expected, actual, text=bool(entry.get("text"))):
+    suffix = Path(relative).suffix.lower()
+    actual = remote_bytes(client, entry["uri"])
+    if actual is not None:
+        matches = (remote_content_matches(expected, actual, text=True)
+                   if suffix == ".md" else expected == actual)
+    elif suffix == ".html":
+        if remote_resource_is_parsed_tree(client, entry["uri"]):
+            parsed = remote_parsed_tree_bytes(client, entry["uri"])
+            matches = parsed is not None and parsed_html_matches(expected, parsed)
+        else:
+            matches = False
+    else:
+        tree_copy = remote_resource_bytes(client, entry["uri"], Path(relative).name)
+        matches = (remote_content_matches(expected, tree_copy, text=True)
+                   if suffix == ".md" else tree_copy is not None and expected == tree_copy)
+    if not matches:
         return False
     if hash_bytes(read_local(relative)) != entry["sha256"]:
         raise ValueError("local source changed during remote readback")

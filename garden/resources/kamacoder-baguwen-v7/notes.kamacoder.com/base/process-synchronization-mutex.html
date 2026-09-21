@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>解释一下进程的同步与互斥，以及解决这些问题的方法｜高频面试题｜操作系统高频面试题｜进程同步、进程互斥、临界区、信号量 | 卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文</title>
+    <meta name="generator" content="VuePress 1.9.10">
+    <link rel="icon" href="https://file1.kamacoder.com/i/web/2025-08-14kamabij.jpg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script>
+      var _hmt = _hmt || [];
+      (function() {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?2ea20ae8da307f7b54137ae9b4fc95b0";
+        var s = document.getElementsByTagName("script")[0]; 
+        s.parentNode.insertBefore(hm, s);
+      })();
+       // 统计每个页面的UV、PV，核心：监听 VuePress 路由变化，主动上报页面访问
+      document.addEventListener('vuepress:routeChanged', () => {
+        if (window._hmt) {
+          _hmt.push(['_trackPageview', window.location.pathname + window.location.hash]);
+        }
+      });
+    </script>
+    <meta name="description" content="本文深入解析操作系统面试高频考点——进程同步与互斥的概念、区别及多种实现方法。详细对比了软件方法（单标志法、双标志法、Peterson算法）、硬件方法（关中断、TSL/Swap指令）以及高级同步机制（信号量、管程、屏障、条件变量），并阐述了临界资源、临界区概念及互斥访问必须遵循的空闲让进、忙则等待、有限等待、让权等待四大准则，帮助读者系统掌握并发控制的核心知识。">
+    <meta property="article:modified_time" content="2026-03-10T10:08:48.000Z">
+    <meta property="og:site_name" content="卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文">
+    <meta property="og:title" content="解释一下进程的同步与互斥，以及解决这些问题的方法｜高频面试题｜操作系统高频面试题｜进程同步、进程互斥、临界区、信号量">
+    <meta property="og:description" content="本文深入解析操作系统面试高频考点——进程同步与互斥的概念、区别及多种实现方法。详细对比了软件方法（单标志法、双标志法、Peterson算法）、硬件方法（关中断、TSL/Swap指令）以及高级同步机制（信号量、管程、屏障、条件变量），并阐述了临界资源、临界区概念及互斥访问必须遵循的空闲让进、忙则等待、有限等待、让权等待四大准则，帮助读者系统掌握并发控制的核心知识。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="/base/process-synchronization-mutex.html">
+    <meta name="twitter:title" content="解释一下进程的同步与互斥，以及解决这些问题的方法｜高频面试题｜操作系统高频面试题｜进程同步、进程互斥、临界区、信号量">
+    <meta name="twitter:description" content="本文深入解析操作系统面试高频考点——进程同步与互斥的概念、区别及多种实现方法。详细对比了软件方法（单标志法、双标志法、Peterson算法）、硬件方法（关中断、TSL/Swap指令）以及高级同步机制（信号量、管程、屏障、条件变量），并阐述了临界资源、临界区概念及互斥访问必须遵循的空闲让进、忙则等待、有限等待、让权等待四大准则，帮助读者系统掌握并发控制的核心知识。">
+    <meta name="twitter:url" content="/base/process-synchronization-mutex.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:label2" content="Filed under">
+    <meta name="twitter:data2" content="大厂面试题, 操作系统, 面试题, 高频考点, 并发">
+    <meta property="article:tag" content="大厂面试题">
+    <meta name="keywords" content="进程同步,进程互斥,同步与互斥区别,临界资源,临界区,信号量,管程,Peterson算法,进程同步面试题,进程互斥面试题,大厂面试题,高频面试题,操作系统面试,并发控制">
+    <meta name="tags" content="大厂面试题,操作系统,面试题,高频考点,并发">
+    <meta name="theme-color" content="#3eaf7c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
+    <link rel="preload" href="/assets/css/0.styles.88f5c8c7.css" as="style"><link rel="preload" href="/assets/js/app.9998fd5e.js" as="script"><link rel="preload" href="/assets/js/2.a7b01108.js" as="script"><link rel="preload" href="/assets/js/1.86f1b283.js" as="script"><link rel="preload" href="/assets/js/80.5db01f07.js" as="script">
+    <link rel="stylesheet" href="/assets/css/0.styles.88f5c8c7.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container sidebar-open"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/" class="home-link router-link-active"><!----> <span class="site-name">卡码笔记-最强八股文</span></a> <div class="links"><!----> <nav class="nav-links can-hide"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav>  <ul class="sidebar-links"><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading open"><span>操作系统</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>基础概念</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>进程与线程</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>中断与异常</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading open"><span>同步与互斥</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/base/thread-synchronization.html" class="sidebar-link">你知道的线程的同步方式有哪些？</a></li><li><a href="/base/lock-types.html" class="sidebar-link">介绍一下几种典型的锁</a></li><li><a href="/base/process-synchronization-mutex.html" aria-current="page" class="active sidebar-link">解释一下进程的同步与互斥，以及解决这些问题的方法</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/base/process-synchronization-mutex.html#简要回答" class="sidebar-link">简要回答</a></li><li class="sidebar-sub-header"><a href="/base/process-synchronization-mutex.html#详细回答" class="sidebar-link">详细回答</a></li><li class="sidebar-sub-header"><a href="/base/process-synchronization-mutex.html#知识图解" class="sidebar-link">知识图解</a></li><li class="sidebar-sub-header"><a href="/base/process-synchronization-mutex.html#知识拓展" class="sidebar-link">知识拓展</a></li></ul></li></ul></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>死锁</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>内存管理</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>I/O 与设备管理</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>其他</span> <span class="arrow right"></span></p> <!----></section></li></ul></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>网络</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>数据库</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>计算机组成原理</span> <span class="arrow right"></span></p> <!----></section></li></ul> </aside> <main class="page"> <div class="page-meta-host" style="display:none;"></div> <!----> <div class="theme-default-content content__default"><h1 id="解释一下进程的同步与互斥-以及解决这些问题的方法"><a href="#解释一下进程的同步与互斥-以及解决这些问题的方法" class="header-anchor">#</a> 解释一下进程的同步与互斥，以及解决这些问题的方法</h1> <h2 id="简要回答"><a href="#简要回答" class="header-anchor">#</a> 简要回答</h2> <h3 id="同步和互斥的概念"><a href="#同步和互斥的概念" class="header-anchor">#</a> 同步和互斥的概念</h3> <ol><li><strong>同步</strong>：<br>
+进程同步是指多个进程按照<strong>一定的顺序</strong>执行，以确保数据的正确性和一致性；当多个进程共享资源或需要协作完成任务时，如果没有同步机制，可能会导致数据不一致或逻辑错误。</li> <li><strong>互斥</strong>：<br>
+进程互斥是指多个进程<strong>不能同时访问共享资源</strong>，以确保资源的独占性；当多个进程需要访问共享资源（如文件、内存、设备）时，如果没有互斥机制，可能会导致数据竞争（Race Condition）。</li></ol> <h3 id="如何实现进程同步和互斥"><a href="#如何实现进程同步和互斥" class="header-anchor">#</a> 如何实现进程同步和互斥</h3> <ol><li><strong>软件实现方法</strong>：
+<ul><li><strong>①单标志法</strong>：<br>
+仅适用于两个进程之间的同步，通过一个标志位实现互斥（例如设置一个共享的整型变量标志turn，用于表示程序进入临界区的权限），但通常不符合实际需求，违背了“<strong>空闲让进</strong>”准则。</li> <li><strong>②双标志先检查法</strong>：<br>
+仅适用于两个进程的同步，进程在进入临界区前<strong>先检查对方标志位</strong>，如果对方标志位为TRUE则等待，否则将自身标志位置为TRUE，该方法不能保证进程对临界资源的互斥使用，违背了“<strong>忙则等待</strong>”准则。</li> <li><strong>③双标志后检查法</strong>：
+仅适用于两个进程的同步，相比于“双标志法先检查法”，调整了检查对方标志位 和 设置自身标志位的顺序，避免了进程同时进入临界区的情况；但可能导致两个进程均陷入无限等待，违背了“<strong>有限等待</strong>” 和 “<strong>空闲让进</strong>”准则。</li> <li><strong>④Peterson算法</strong>：<br>
+结合 单标志位 和 双标志后检查法，解决忙等待和死锁问题，但不满足“<strong>让权等待</strong>”准则，且<strong>只能</strong>处理<strong>两个进程之间</strong>的临界区问题。</li></ul></li> <li><strong>硬件实现方法</strong>：
+<ul><li><strong>①关中断方法</strong>：在进入临界区前关中断，退出临界区后开中断。</li> <li><strong>②硬件指令方法</strong>：TSL（Test and Set Lock）：通过硬件指令实现原子操作。Swap：通过硬件指令交换两个变量的值。</li></ul></li> <li><strong>高级同步机制</strong>：
+<ul><li><strong>①信号量</strong>：用于实现同步和互斥，支持P()和V()操作。</li> <li><strong>②管程</strong>：将共享资源和操作封装在一起，提供了一种结构化的同步方式。</li> <li><strong>③屏障</strong>：用于确保多个进程或线程在某个点之前不会继续执行。</li> <li><strong>④条件变量</strong>：用于在多个进程或线程之间传递状态信息。</li></ul></li></ol> <h2 id="详细回答"><a href="#详细回答" class="header-anchor">#</a> 详细回答</h2> <h3 id="同步和互斥的概念-2"><a href="#同步和互斥的概念-2" class="header-anchor">#</a> 同步和互斥的概念</h3> <ol><li><strong>同步</strong>：<br>
+同步关系，又称进程的<strong>直接相互制约关系</strong>（程序 --- 程序模式），是多个<strong>协作</strong>进程在工作中相互等待或通信的<strong>协作关系</strong>。</li> <li><strong>互斥</strong>：<br>
+互斥关系，又称进程的<strong>间接相互制约关系</strong>（程序 --- 资源 --- 程序模式），当一个进程进入临界区访问临界资源时，另一进程必须等待，当访问临界资源的进程退出临界区后另一个进程才被允许访问该临界资源，体现的是进程间的<strong>竞争关系</strong>。</li></ol> <h3 id="如何实现进程同步和互斥-2"><a href="#如何实现进程同步和互斥-2" class="header-anchor">#</a> 如何实现进程同步和互斥</h3> <ol><li><p><strong>软件实现方法</strong>：</p> <ul><li><p><strong>①单标志法</strong>：设置一个<strong>共享</strong>的变量标志，比如整型变量turn，表示程序进入临界区的权限，可以取值为0或1；<strong>单标志法适用于两个进程之间的同步</strong>，以P0进程和P1进程为例，当turn取0时，进程P0可以进入临界区；当turn取1时，进程P1可以进入临界区；当进程P0退出临界区时，通过将turn置为1将<strong>进入临界区的权限</strong>转让给进程P1，进程P1的退出同理。算法可用伪代码描述如下：</p> <div class="language-c line-numbers-mode"><pre class="language-c"><code><span class="token comment">//进程P0</span>
+<span class="token keyword">while</span> <span class="token punctuation">(</span>TRUE<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token keyword">while</span> <span class="token punctuation">(</span>turn <span class="token operator">!=</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>	<span class="token comment">//&quot;进入区&quot;;如果turn = 1，说明进程P1还未退出临界区，此时进程P0会阻塞在while循环中。</span>
+	临界区<span class="token punctuation">;</span>
+	turn <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>			<span class="token comment">//&quot;退出区&quot;;允许进程P1进入临界区，将 进入临界区的权限 转让给进程P1。</span>
+	剩余区<span class="token punctuation">;</span>				<span class="token comment">//其余部分代码</span>
+<span class="token punctuation">}</span>
+<span class="token comment">//进程P1</span>
+<span class="token keyword">while</span> <span class="token punctuation">(</span>TRUE<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token keyword">while</span> <span class="token punctuation">(</span>turn <span class="token operator">!=</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>	<span class="token comment">//&quot;进入区&quot;; 检查标志</span>
+	临界区<span class="token punctuation">;</span>
+	turn <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>			<span class="token comment">//&quot;退出区&quot;; 转让权限</span>
+	剩余区<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br></div></div><p>该方法的问题在于<strong>强制要求进程轮流进入临界区</strong>，但这样不符合实际需求，违背了“<strong>空闲让进</strong>”准则。</p></li> <li><p><strong>②双标志先检查法</strong>：与“单标志法”相比，将共享变量turn改为数组flag[2]，进程在进入临界区前<strong>先检查对方标志位</strong>——如果对方标志位为TRUE则等待，否则将自身标志位 置为TRUE，表示自己正在使用临界资源，退出临界区后再将自身标志位置为FALSE，表示自己已经退出临界区，以进程Pi和进程Pj为例，双标志先检查法用伪代码描述如下：</p> <div class="language-c line-numbers-mode"><pre class="language-c"><code><span class="token keyword">while</span> <span class="token punctuation">(</span>TRUE<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token keyword">while</span> <span class="token punctuation">(</span>flag<span class="token punctuation">[</span>j<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>		<span class="token comment">//检查对方进程是否正在使用临界资源。</span>
+	flag<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> TRUE<span class="token punctuation">;</span>			<span class="token comment">//将自身flag标志位置为TRUE，表示本进程已进入临界区。</span>
+	临界区<span class="token punctuation">;</span>
+	flag<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> FALSE<span class="token punctuation">;</span>		<span class="token comment">//将自身flag标志位置为FALSE，表示本进程已经退出临界区。</span>
+	剩余区<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br></div></div><p>该方法的问题在于，<u>两个进程可能同时进入临界区</u>，违背了“<strong>忙则等待</strong>”准则，因此该方法不能保证进程对临界资源的互斥使用。</p></li> <li><p><strong>③双标志后检查法</strong>：调整了“双标志先检查法”中更改自身标志位和准入检测的顺序，<strong>先设置标志，再进行准入检测，避免了进程同时进入临界区的情况</strong>。以进程Pi和进程Pj为例，双标志后检查法用伪代码描述如下：</p> <div class="language-c line-numbers-mode"><pre class="language-c"><code><span class="token keyword">while</span> <span class="token punctuation">(</span>TRUE<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	flag<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> TRUE<span class="token punctuation">;</span>		<span class="token comment">//调整了前两条语句的执行顺序。</span>
+	<span class="token keyword">while</span> <span class="token punctuation">(</span>flag<span class="token punctuation">[</span>j<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	临界区<span class="token punctuation">;</span>
+	flag<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> FALSE<span class="token punctuation">;</span>
+	剩余区<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br></div></div><p>该方法的问题在于，可能导致两个进程均陷入无限等待（两个进程均无法跳出while循环），违背了“<strong>有限等待</strong>” 和 “<strong>空闲让进</strong>”准则。</p></li> <li><p><strong>④Peterson算法</strong>：结合 单标志位 和 双标志后检查法，既设置flag标志，用于表明进程是否希望进入临界区，又设置共享变量turn，用于规定进程进入临界区的顺序。Peterson算法<strong>满足互斥条件，空闲让进条件 和 有限等待条件</strong>，但不满足“<strong>让权等待</strong>”准则，且<strong>只能</strong>处理<strong>两个进程之间</strong>的临界区问题，不符合实际需求。Peterson算法可用伪代码描述如下：</p> <div class="language-c line-numbers-mode"><pre class="language-c"><code><span class="token keyword">while</span> <span class="token punctuation">(</span>TRUE<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	flag<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> TRUE<span class="token punctuation">;</span>		<span class="token comment">//先表示当前进程希望进入临界区。</span>
+	turn <span class="token operator">=</span> j<span class="token punctuation">;</span>			<span class="token comment">//再进行谦让，允许对方进入临界区。</span>
+	<span class="token keyword">while</span> <span class="token punctuation">(</span>flag<span class="token punctuation">[</span>j<span class="token punctuation">]</span> <span class="token operator">&amp;&amp;</span> turn <span class="token operator">==</span> j<span class="token punctuation">)</span><span class="token punctuation">;</span>	<span class="token comment">//如果对方也想进入临界区，而自己又表示了谦让，那就让对方先进临界区，自己则等待。</span>
+	临界区<span class="token punctuation">;</span>
+	flag<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> FALSE<span class="token punctuation">;</span>	<span class="token comment">//退出临界区时，将自身flag标志置为FALSE，表示退出临界区。</span>
+	剩余区<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br></div></div><p>可见，仅凭软件机制仍有不足之处。</p></li></ul></li> <li><p><strong>硬件实现方法</strong>：</p> <ul><li><strong>①关中断方法</strong>：在进入临界区前关中断，暂停进程调度，让进程独占处理机，当进程退出临界区后开中断；关中断方法满足了“空闲让进”，“忙则等待” 和 “有限等待”；关中断方法不适用于多处理器环境，因为即使同时关闭了所有核心的中断，也不能阻止其他核心上正在执行的进程。</li> <li><strong>②硬件指令方法</strong>：TSL（Test and Set Lock）：通过硬件指令实现原子操作。Swap：又称exchange指令，通过硬件指令交换两个变量的值。</li></ul></li> <li><p><strong>高级同步机制</strong>：</p> <ul><li><strong>①信号量（Semaphore）</strong>：<br> <strong>Δ</strong> 其基本原理是在几个进程之间使用简单的信号来实现同步；在操作系统中，信号量是一种关联一类临界资源的<strong>数据结构</strong>，<strong>信号量的不同值表示一个临界资源的不同状态</strong>；信号量机制可以用于实现同步和互斥，支持<strong>P()和V()</strong> 操作。<br> <strong>Δ</strong> P(S)表示申请一个资源S，若资源不够则阻塞等待（wait）；V(S)表示释放一个资源S，若有进程在等待该资源，则唤醒一个正在等待的进程（release）。<br> <strong>Δ</strong> 若从用途和取值范围出发，信号量可分为<strong>二进制信号量</strong> 和 <strong>计数信号量</strong>。若从实现机制和行为特性出发，信号量可分为<strong>整型信号量</strong> 和 <strong>记录型信号量</strong>。</li> <li><strong>②管程（Monitor）</strong>：<br> <strong>Δ</strong> 引入管程的目的主要是集中管理分散于不同进程的临界区，防止进程违反同步操作。管程是一个<u>软件模块</u>，由一些公共变量及其描述和访问所有这些变量的函数组成。<br> <strong>Δ</strong> 进程对共享资源的请求、释放和其他操作必须通过同一个管程来实现。当多个进程请求访问同一资源时，会<strong>根据资源的情况接受或拒绝</strong>，<strong>确保每次只有一个进程进入临界区</strong>，有效实现进程互斥。<br> <strong>Δ</strong> 管程包含了<strong>面向对象</strong>的思想，它将表达共享资源的数据结构 和 对其进行操作的进程封装在一个对象中，并封装了同步操作，从而对进程隐藏同步的细节，简化了调用同步功能的接口。</li> <li><strong>③屏障（Barrier）</strong>：<br> <strong>Δ</strong> 屏障是一种高级同步机制，用于确保多个进程或线程在某个点之前不会继续执行；当进程或线程<strong>到达屏障时</strong>，它会<strong>等待</strong>，直到所有进程或线程都到达屏障后才继续执行；<br> <strong>Δ</strong> 屏障机制适合需要多个进程或线程同步执行的场景，如并行计算、多阶段任务。</li> <li><strong>④条件变量（Condition Variable）</strong>：<br> <strong>Δ</strong> 条件变量是一种同步机制，用于在多个进程或线程之间传递状态信息，特别适合于&quot;等待某条件成立&quot;的场景。条件变量通常<strong>与互斥锁一起使用</strong>，以避免竞争条件。<br> <strong>Δ</strong> 条件变量本质上是一个<strong>抽象对象</strong>，其内部维护了一个<strong>等待队列</strong>，允许线程在特定条件不满足时进入睡眠状态，并在条件满足时被唤醒。</li></ul></li></ol> <h2 id="知识图解"><a href="#知识图解" class="header-anchor">#</a> 知识图解</h2> <ul><li><strong>进程高级同步机制</strong>，如下图所示：<br> <img src="https://file1.kamacoder.com/i/bagu/advanced_synchronization.jpg" alt="image"></li> <li><strong>进程同步 和 进程互斥 的区别</strong>，如下图所示：<br> <img src="https://file1.kamacoder.com/i/bagu/synchronism_mutex_contrast.jpg" alt="image"></li></ul> <h2 id="知识拓展"><a href="#知识拓展" class="header-anchor">#</a> 知识拓展</h2> <ul><li><strong>临界资源 和 临界区的概念</strong>：
+<ol><li><strong>临界资源</strong>：同一<strong>时刻</strong>只能由一个进程使用的资源称为<strong>临界资源</strong>。打印机、磁带机、绘图仪等物理设备属于临界资源，由不同进程共享的消息队列、变量、数据、文件等软件资源也属于临界资源。</li> <li><strong>临界区</strong>：程序中<strong>访问临界资源的</strong>那一部分<strong>代码</strong>称为临界区。进程的运行是异步并发的，为了避免与推进顺序有关的错误，进程必须<strong>互斥</strong>访问临界区，来获得临界资源的使用权。临界区前面通常必须有一段代码用于对临界资源的检查，这段代码称为<strong>进入区</strong>。对应地，临界区之后必须有一个<strong>退出区</strong>，表明进程已经释放了相应的临界资源。代码中的剩余部分则称为<strong>剩余区</strong>。</li></ol></li> <li>一个进程包括了以下内容：<strong>程序段</strong>，<strong>数据段</strong>，和<strong>进程控制块（PCB）</strong>。当程序未运行时，程序段与数据段存储在磁盘上，是<strong>静态</strong>的；当程序运行时，操作系统会将程序段和数据段从磁盘加载到内存中，成为进程的一部分，形成进程的地址空间；进程是指将这些程序与数据从磁盘加载到内存后的执行过程，是<strong>动态</strong>的，多个进程可以对应同一段程序代码。</li> <li>进程之间<strong>同步与互斥</strong>的实现，都应遵循以下<strong>四条设计准则</strong>：
+<ol><li><strong>空闲让进（Entry on idle）</strong>：如果一个进程请求进入一个临界区，而此时没有其他进程在该临界区内，应立即允许该进程进入临界区，以便有效使用临界资源。</li> <li><strong>忙则等待（Wait when busy）</strong>：如果已经有一个进程进入临界区，正在访问临界资源，那么其他希望进入该临界区的进程应该在临界区外等待，确保进程互斥访问临界资源。</li> <li><strong>有限等待（Bounded waiting）</strong>：对于请求访问临界资源的进程，必须保证它能在有限时间内进入对应的临界区。否则，进程长期得不到所需的资源，造成&quot;无限等待&quot;的局面，即使最终得到临界资源，也失去了意义。</li> <li><strong>让权等待（Wait for turn）</strong>：若一个进程无法进入临界区，应该立即释放处理器，以提高处理器利用率，避免出现“忙等”。</li></ol></li></ul></div> <footer class="page-edit"><!----> <div class="last-updated"><span class="prefix">Last Updated:</span> <span class="time">3/10/2026, 6:08:48 PM</span></div></footer> <div class="page-nav"><p class="inner"><span class="prev">
+      ←
+      <a href="/base/lock-types.html" class="prev">
+        介绍一下几种典型的锁
+      </a></span> <span class="next"><a href="/base/deadlock-avoidance.html">
+        什么是死锁？如何避免死锁？
+      </a>
+      →
+    </span></p></div>  <div class="comments-wrapper" data-v-558649bb><div class="comments-header" data-v-558649bb><h3 class="comments-title" data-v-558649bb>评论</h3> <!----></div> <div class="comments-loading" data-v-558649bb><p data-v-558649bb>验证登录状态...</p></div> <!----> <!----> <!----></div></main> <aside class="page-sidebar"> <div class="page-side-toolbar"><div class="option-box"><img src="/images/system/toggle.png" width="30px" alt="侧边栏" class="nozoom"> <span class="show-txt">侧边栏</span></div> <div class="option-box"><img src="/images/system/dark.svg" width="30px" alt="夜间模式" class="nozoom"> <span class="show-txt">夜间</span></div> <div class="option-box"><a href="https://jianli.kamacoder.com/" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/2025-08-14kamajianli.jpg" width="25px" alt="卡码简历" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码简历</span></a></div> <div class="option-box"><a href="https://programmercarl.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/代码随想录.jpg" width="25px" alt="代码随想录" class="nozoom"> <span class="show-txt" style="margin-top: 5px">代码随想录</span></a></div> <div class="option-box"><a href="https://toudi.kamacoder.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/卡码投递表.jpg" width="25px" alt="卡码投递表" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码投递表🔥</span></a></div> <div class="option-box"><img src="/images/system/实习校招202503.png" width="25px" alt="2026实习校招群" class="nozoom"> <span class="show-txt">2026群</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">添加客服微信</span> <img src="/assets/img/26校招.5e9d30da.jpg" height="180px" alt="2026实习校招客服微信" style="margin: 10px">
+            PS：通过微信后，请发送<b>姓名-学校-年级-2026实习/校招</b></div></div></div></div> <div class="option-box"><img src="/images/system/red-heart.png" width="25px" alt="支持卡码笔记" class="nozoom"> <span class="show-txt">支持卡码笔记</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">鼓励/支持/赞赏Carl</span> <img height="180px" src="/assets/img/网站赞赏.69fb25a5.jpg" alt="卡码笔记赞赏码" style="margin: 5px"> <br>1.
+            如果感觉本站对你很有帮助，也可以请Carl喝杯奶茶，金额大小不重要，心意已经收下
+            <br>2. 希望大家都能梦想成真，有好的前程，加油💪
+          </div></div></div></div></div>  </aside></div><div class="global-ui"><!----></div></div>
+    <script src="/assets/js/app.9998fd5e.js" defer></script><script src="/assets/js/2.a7b01108.js" defer></script><script src="/assets/js/1.86f1b283.js" defer></script><script src="/assets/js/80.5db01f07.js" defer></script>
+  </body>
+</html>

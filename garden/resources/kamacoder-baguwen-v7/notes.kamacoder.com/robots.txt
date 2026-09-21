@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://notes.kamacoder.com/sitemap.xml

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>TCP连接如何确保可靠性？｜大厂面试题｜计算机网络高频面试题｜可靠传输、序列号、重传、流量控制 | 卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文</title>
+    <meta name="generator" content="VuePress 1.9.10">
+    <link rel="icon" href="https://file1.kamacoder.com/i/web/2025-08-14kamabij.jpg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script>
+      var _hmt = _hmt || [];
+      (function() {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?2ea20ae8da307f7b54137ae9b4fc95b0";
+        var s = document.getElementsByTagName("script")[0]; 
+        s.parentNode.insertBefore(hm, s);
+      })();
+       // 统计每个页面的UV、PV，核心：监听 VuePress 路由变化，主动上报页面访问
+      document.addEventListener('vuepress:routeChanged', () => {
+        if (window._hmt) {
+          _hmt.push(['_trackPageview', window.location.pathname + window.location.hash]);
+        }
+      });
+    </script>
+    <meta name="description" content="TCP 如何确保数据传输的可靠性是计算机网络面试中的高频考点。本文详细解析了 TCP 实现可靠传输的七大核心机制：序列号与确认应答保证数据有序、不丢失；超时重传与快速重传应对网络丢包；校验和检测比特错误；三次握手与四次挥手进行可靠的连接管理；滑动窗口实现流量控制；以及拥塞控制算法动态调整发送速率。掌握这些机制及其协同工作原理，是应对大厂面试中 TCP 相关问题的关键。">
+    <meta property="article:modified_time" content="2026-03-10T10:08:48.000Z">
+    <meta property="og:site_name" content="卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文">
+    <meta property="og:title" content="TCP连接如何确保可靠性？｜大厂面试题｜计算机网络高频面试题｜可靠传输、序列号、重传、流量控制">
+    <meta property="og:description" content="TCP 如何确保数据传输的可靠性是计算机网络面试中的高频考点。本文详细解析了 TCP 实现可靠传输的七大核心机制：序列号与确认应答保证数据有序、不丢失；超时重传与快速重传应对网络丢包；校验和检测比特错误；三次握手与四次挥手进行可靠的连接管理；滑动窗口实现流量控制；以及拥塞控制算法动态调整发送速率。掌握这些机制及其协同工作原理，是应对大厂面试中 TCP 相关问题的关键。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="/base/tcp-reliability.html">
+    <meta name="twitter:title" content="TCP连接如何确保可靠性？｜大厂面试题｜计算机网络高频面试题｜可靠传输、序列号、重传、流量控制">
+    <meta name="twitter:description" content="TCP 如何确保数据传输的可靠性是计算机网络面试中的高频考点。本文详细解析了 TCP 实现可靠传输的七大核心机制：序列号与确认应答保证数据有序、不丢失；超时重传与快速重传应对网络丢包；校验和检测比特错误；三次握手与四次挥手进行可靠的连接管理；滑动窗口实现流量控制；以及拥塞控制算法动态调整发送速率。掌握这些机制及其协同工作原理，是应对大厂面试中 TCP 相关问题的关键。">
+    <meta name="twitter:url" content="/base/tcp-reliability.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:label2" content="Filed under">
+    <meta name="twitter:data2" content="大厂面试题, 计算机网络, 高频考点, 面试题, TCP协议, 网络协议">
+    <meta property="article:tag" content="大厂面试题">
+    <meta name="keywords" content="TCP可靠性,TCP可靠传输机制,TCP如何保证可靠性,TCP序列号确认机制,TCP重传机制,TCP流量控制,TCP拥塞控制,三次握手四次挥手,大厂面试题,计算机网络高频面试题,TCP面试题,TCP连接管理,TCP校验和,快速重传">
+    <meta name="tags" content="大厂面试题,计算机网络,高频考点,面试题,TCP协议,网络协议">
+    <meta name="theme-color" content="#3eaf7c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
+    <link rel="preload" href="/assets/css/0.styles.88f5c8c7.css" as="style"><link rel="preload" href="/assets/js/app.9998fd5e.js" as="script"><link rel="preload" href="/assets/js/2.a7b01108.js" as="script"><link rel="preload" href="/assets/js/1.86f1b283.js" as="script"><link rel="preload" href="/assets/js/98.b711245b.js" as="script">
+    <link rel="stylesheet" href="/assets/css/0.styles.88f5c8c7.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container sidebar-open"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/" class="home-link router-link-active"><!----> <span class="site-name">卡码笔记-最强八股文</span></a> <div class="links"><!----> <nav class="nav-links can-hide"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav>  <ul class="sidebar-links"><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>操作系统</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading open"><span>网络</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>基础概念</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading open"><span>TCP 深入</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/base/tcp-three-way-handshake.html" class="sidebar-link">TCP三次握手的详细流程及核心目的？</a></li><li><a href="/base/three-way-handshake-why.html" class="sidebar-link">三次握手的过程？以及为什么是三次而不是四次和两次</a></li><li><a href="/base/tcp-four-way-handshake.html" class="sidebar-link">四次挥手的过程是怎样的？为什么是四次而不是三次或五次？</a></li><li><a href="/base/time-wait-state.html" class="sidebar-link">TIME_WAIT状态的作用？</a></li><li><a href="/base/tcp-reliability.html" aria-current="page" class="active sidebar-link">TCP连接如何确保可靠性？</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/base/tcp-reliability.html#简要回答" class="sidebar-link">简要回答</a></li><li class="sidebar-sub-header"><a href="/base/tcp-reliability.html#详细回答" class="sidebar-link">详细回答</a></li><li class="sidebar-sub-header"><a href="/base/tcp-reliability.html#知识拓展" class="sidebar-link">知识拓展</a></li></ul></li><li><a href="/base/congestion-control.html" class="sidebar-link">能说说拥塞控制是怎样实现的吗？</a></li><li><a href="/base/tcp-keepalive-vs-http-keep-alive.html" class="sidebar-link">TCPKeepalive和HTTPKeep-Alive的区别？</a></li></ul></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>HTTP 进阶</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>安全与缓存</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>综合应用</span> <span class="arrow right"></span></p> <!----></section></li></ul></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>数据库</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>计算机组成原理</span> <span class="arrow right"></span></p> <!----></section></li></ul> </aside> <main class="page"> <div class="page-meta-host" style="display:none;"></div> <!----> <div class="theme-default-content content__default"><h1 id="tcp连接如何确保可靠性"><a href="#tcp连接如何确保可靠性" class="header-anchor">#</a> TCP连接如何确保可靠性？</h1> <h2 id="简要回答"><a href="#简要回答" class="header-anchor">#</a> 简要回答</h2> <p>TCP 通过一系列协同工作的机制来确保数据传输的<strong>可靠性</strong>，即保证数据能够<strong>准确、有序、不丢失、不重复</strong>地从发送端送达接收端。其核心机制包括：</p> <ol><li><strong>序列号 (Sequence Numbers):</strong> 为每个字节流分配序号，用于保证数据段的顺序，检测丢失和重复的数据段。</li> <li><strong>确认应答 (Acknowledgements - ACKs):</strong> 接收方发送 ACK 报文来确认已成功接收到的数据，告知发送方哪些数据已安全抵达。</li> <li><strong>重传机制 (Retransmission):</strong> 当发送方在规定时间内未收到某数据段的确认时（超时重传），或收到多个重复的 ACK 时（快速重传），会重新发送该数据段，以应对数据丢失或确认丢失。</li> <li><strong>校验和 (Checksum):</strong> 发送方和接收方计算数据段（包括头部和数据）的校验和，用于检测数据在传输过程中是否发生比特错误。</li> <li><strong>连接管理 (Connection Management):</strong> 通过三次握手建立连接，确保双方都准备好收发数据并同步初始序列号；通过四次挥手断开连接，确保双方数据都传输完毕。</li> <li><strong>流量控制 (Flow Control):</strong> 使用滑动窗口机制，接收方告知发送方自己还有多少缓冲区空间（接收窗口），防止发送方发送过快导致接收方处理不过来而丢包。</li> <li><strong>拥塞控制 (Congestion Control):</strong> 通过感知网络拥堵状况（如丢包、延迟增加）动态调整发送速率（拥塞窗口），避免过多数据注入网络导致路由器过载而丢包。</li></ol> <h2 id="详细回答"><a href="#详细回答" class="header-anchor">#</a> 详细回答</h2> <p>TCP (Transmission Control Protocol) 设计的核心目标之一就是提供<strong>可靠的数据传输服务</strong>，即保证数据能够<strong>准确、有序、不丢失、不重复</strong>地从发送端送达接收端。它在网络层 IP 协议提供的“尽力而为”的不可靠服务基础上，增加了一系列复杂的机制来实现这一目标：</p> <ol><li><strong>基于字节流的序列号机制 (Sequence Numbers):</strong> <ul><li>TCP 将应用程序交付的数据视为一个<strong>连续的字节流</strong>。在建立连接时，双方会协商一个初始序列号 (ISN)。之后，TCP 会为发送的每一个字节都分配一个<strong>逻辑上</strong>的序列号。</li> <li>每个发送的 TCP 数据段 (Segment) 的头部都包含该段数据中第一个字节的序列号。</li> <li><strong>作用：</strong><br>
+① <strong>保证顺序：</strong> 接收方可以根据序列号对收到的乱序数据段进行重新排序，恢复成原始的字节流顺序。<br>
+② <strong>检测丢失：</strong> 接收方可以通过检查收到的序列号是否连续来判断是否有数据段丢失。<br>
+③ <strong>去除重复：</strong> 如果接收方收到具有相同序列号范围的数据段，可以丢弃重复的数据。</li></ul></li> <li><strong>确认应答机制 (Acknowledgements - ACKs):</strong> <ul><li>当接收方成功接收到来自发送方的数据段后，会向发送方回送一个确认 (ACK) 报文段。</li> <li>ACK 报文中包含一个<strong>确认号 (Acknowledgement Number)</strong>，这个确认号通常是接收方期望接收的<strong>下一个字节</strong>的序列号。这是一种<strong>累积确认</strong>的方式，表示该确认号<strong>之前的</strong>所有字节（数据）都已成功接收。</li> <li><strong>作用：</strong> 明确告知发送方哪些数据已经被对方安全接收，是触发数据发送和判断是否需要重传的关键依据。</li></ul></li> <li><strong>超时重传机制 (Timeout Retransmission):</strong> <ul><li>发送方每发送一个数据段，就会启动一个<strong>重传计时器 (Retransmission Timer)</strong>。</li> <li>如果在计时器超时之前收到了对该数据段的确认 (或者对包含该段数据的更高序列号的确认)，则撤销计时器。</li> <li>如果计时器<strong>超时</strong>（<strong>RTO - Retransmission Timeout</strong>）后仍未收到确认，发送方就认为该数据段可能在网络中丢失或其 ACK 丢失，于是会<strong>重新发送</strong>该数据段。</li> <li>RTO 的值是<strong>动态计算</strong>的，基于对网络往返时间 (RTT) 的测量和估计，以适应不同的网络状况。</li> <li><strong>作用：</strong> 这是处理数据段丢失或 ACK 丢失的最基本机制。</li></ul></li> <li><strong>快速重传机制 (Fast Retransmission):</strong> <ul><li>当接收方收到一个<strong>失序</strong>的数据段时（即收到的段序号大于期望的序号），它会立即发送一个<strong>重复的 ACK</strong>，该 ACK 的确认号仍然是它当前期望接收的那个丢失的字节序号。</li> <li>如果发送方连续收到<strong>三个或以上</strong>的重复 ACK（<strong>冗余 ACK</strong>），它就推断这个 ACK 对应的那个数据段很可能已经在网络中丢失了，并且接收方确实收到了该丢失段之后的一些数据。</li> <li>此时，发送方<strong>不必等待重传计时器超时</strong>，而是立即<strong>重新发送</strong>那个被重复确认的数据段。</li> <li><strong>作用：</strong> 相比超时重传，快速重传能更早地发现并恢复丢失的数据段，提高了传输效率，尤其是在网络丢包但不太拥塞的情况下。</li></ul></li> <li><strong>校验和 (Checksum):</strong> <ul><li>TCP 头部和数据部分都会计算一个 16 位的校验和。发送方计算并将其放入 TCP 头部。</li> <li>接收方收到数据段后，会重新计算校验和，并与头部中的校验和字段进行比较。</li> <li>如果不匹配，说明数据在传输过程中可能发生了比特错误，接收方会<strong>丢弃</strong>这个数据段（不发送 ACK，等待发送方超时重传）。</li> <li><strong>作用：</strong> 提供基本的端到端数据完整性校验，检测传输错误。</li></ul></li> <li><strong>连接管理 (Connection Management):</strong> <ul><li><strong>三次握手 (Three-way Handshake):</strong> 在传输数据前，通过交换三个报文段（SYN, SYN+ACK, ACK）来建立连接。这个过程确保了双方都同意建立连接，能够正常收发数据，并同步了双方的初始序列号 (ISN)。</li> <li><strong>四次挥手 (Four-way Handshake):</strong> 在数据传输结束后，通过交换四个报文段（FIN, ACK, FIN+ACK, ACK）来终止连接。这个过程确保了双方的数据都能完整发送并被确认，各自都能优雅地关闭连接。</li> <li><strong>作用：</strong> 保证了数据传输是在一个双方确认建立、状态同步、并且最终能可靠关闭的通道上进行的。</li></ul></li> <li><strong>流量控制 (Flow Control):</strong> <ul><li>使用滑动窗口机制，接收方告知发送方自己还有多少缓冲区空间（接收窗口），防止发送方发送过快导致接收方处理不过来而丢包。</li> <li><strong>作用：</strong> 防止发送方压垮接收方，减少因接收端处理不过来导致的丢包，从而间接支持了可靠传输。</li></ul></li> <li><strong>拥塞控制 (Congestion Control):</strong> <ul><li>通过感知网络拥堵状况（如丢包、延迟增加）动态调整发送速率（拥塞窗口），避免过多数据注入网络导致路由器过载而丢包。</li> <li><strong>作用：</strong> 防止发送方过多的数据导致网络（路由器）过载而丢包，维护网络的稳定性，减少因网络拥塞导致的丢包，从而间接支持了可靠传输。</li></ul></li></ol> <h2 id="知识拓展"><a href="#知识拓展" class="header-anchor">#</a> 知识拓展</h2> <ol><li><p><strong>TCP 序列号确认机制</strong>，如下图所示：<br> <img src="https://file1.kamacoder.com/i/bagu/TCP_ack_mechanism.jpg" alt="image"></p></li> <li><p><strong>TCP 超时重传机制</strong>，如下图所示：<br> <img src="https://file1.kamacoder.com/i/bagu/TCP_timeout_retransmission.jpg" alt="image"></p></li> <li><p><strong>TCP 可靠传输、流量控制与拥塞控制的关系：</strong></p> <ol><li><strong>可靠传输是基石：</strong> 可靠传输机制（序列号、确认、重传、校验和）是 TCP 的核心目标和基础保障。无论网络状况如何，这些机制都在努力确保数据“必须”准确、有序、完整地到达。它们是处理<strong>已经发生</strong>的错误（丢包、乱序、比特错误）的最终手段。</li> <li><strong>流量控制是“点对点”的协调：</strong> 流量控制关注的是<strong>发送方</strong>和<strong>接收方</strong>之间的速度匹配。它通过接收窗口 (<code>rwnd</code>) 防止发送方发送速度超过接收方的处理能力，避免<strong>接收端缓冲区溢出</strong>导致的丢包。它是一种<strong>端到端</strong>的速率协调机制。</li> <li><strong>拥塞控制是“全局”的考量：</strong> 拥塞控制关注的是<strong>发送方</strong>与<strong>整个网络</strong>之间的容量匹配。它通过拥塞窗口 (<code>cwnd</code>) 和一系列算法来探测和适应网络的承载能力，避免<strong>网络中间节点（如路由器）过载</strong>导致的丢包。它是一种<strong>发送端对网络整体状况</strong>的自适应调节机制。</li> <li><strong>相互支撑与优化关系：</strong><br>
+① <strong>流量控制和拥塞控制支持可靠传输：</strong> 通过主动限制发送速率，它们旨在<strong>预防</strong>或<strong>减少</strong>特定类型的丢包（接收端溢出丢包、网络拥塞丢包）。丢包减少了，就不需要那么频繁地触发代价较高的<strong>重传</strong>机制，从而使得整个可靠传输过程更<strong>高效</strong>、更<strong>稳定</strong>。<br>
+② <strong>可靠传输机制支撑流量控制和拥塞控制：</strong> 流量控制和拥塞控制的算法本身也依赖于可靠传输机制提供的反馈信息。例如，拥塞控制通常将<strong>丢包事件</strong>（通过超时或收到重复 ACK 检测到）作为网络拥塞的信号；流量控制依赖于 ACK 报文来传递接收窗口信息。没有可靠的确认和序列号机制，流量控制和拥塞控制也无法有效工作。</li></ol></li></ol></div> <footer class="page-edit"><!----> <div class="last-updated"><span class="prefix">Last Updated:</span> <span class="time">3/10/2026, 6:08:48 PM</span></div></footer> <div class="page-nav"><p class="inner"><span class="prev">
+      ←
+      <a href="/base/time-wait-state.html" class="prev">
+        TIME_WAIT状态的作用？
+      </a></span> <span class="next"><a href="/base/congestion-control.html">
+        能说说拥塞控制是怎样实现的吗？
+      </a>
+      →
+    </span></p></div>  <div class="comments-wrapper" data-v-558649bb><div class="comments-header" data-v-558649bb><h3 class="comments-title" data-v-558649bb>评论</h3> <!----></div> <div class="comments-loading" data-v-558649bb><p data-v-558649bb>验证登录状态...</p></div> <!----> <!----> <!----></div></main> <aside class="page-sidebar"> <div class="page-side-toolbar"><div class="option-box"><img src="/images/system/toggle.png" width="30px" alt="侧边栏" class="nozoom"> <span class="show-txt">侧边栏</span></div> <div class="option-box"><img src="/images/system/dark.svg" width="30px" alt="夜间模式" class="nozoom"> <span class="show-txt">夜间</span></div> <div class="option-box"><a href="https://jianli.kamacoder.com/" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/2025-08-14kamajianli.jpg" width="25px" alt="卡码简历" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码简历</span></a></div> <div class="option-box"><a href="https://programmercarl.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/代码随想录.jpg" width="25px" alt="代码随想录" class="nozoom"> <span class="show-txt" style="margin-top: 5px">代码随想录</span></a></div> <div class="option-box"><a href="https://toudi.kamacoder.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/卡码投递表.jpg" width="25px" alt="卡码投递表" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码投递表🔥</span></a></div> <div class="option-box"><img src="/images/system/实习校招202503.png" width="25px" alt="2026实习校招群" class="nozoom"> <span class="show-txt">2026群</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">添加客服微信</span> <img src="/assets/img/26校招.5e9d30da.jpg" height="180px" alt="2026实习校招客服微信" style="margin: 10px">
+            PS：通过微信后，请发送<b>姓名-学校-年级-2026实习/校招</b></div></div></div></div> <div class="option-box"><img src="/images/system/red-heart.png" width="25px" alt="支持卡码笔记" class="nozoom"> <span class="show-txt">支持卡码笔记</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">鼓励/支持/赞赏Carl</span> <img height="180px" src="/assets/img/网站赞赏.69fb25a5.jpg" alt="卡码笔记赞赏码" style="margin: 5px"> <br>1.
+            如果感觉本站对你很有帮助，也可以请Carl喝杯奶茶，金额大小不重要，心意已经收下
+            <br>2. 希望大家都能梦想成真，有好的前程，加油💪
+          </div></div></div></div></div>  </aside></div><div class="global-ui"><!----></div></div>
+    <script src="/assets/js/app.9998fd5e.js" defer></script><script src="/assets/js/2.a7b01108.js" defer></script><script src="/assets/js/1.86f1b283.js" defer></script><script src="/assets/js/98.b711245b.js" defer></script>
+  </body>
+</html>

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Redis常见的数据结构有哪些？ | 卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文</title>
+    <meta name="generator" content="VuePress 1.9.10">
+    <link rel="icon" href="https://file1.kamacoder.com/i/web/2025-08-14kamabij.jpg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script>
+      var _hmt = _hmt || [];
+      (function() {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?2ea20ae8da307f7b54137ae9b4fc95b0";
+        var s = document.getElementsByTagName("script")[0]; 
+        s.parentNode.insertBefore(hm, s);
+      })();
+       // 统计每个页面的UV、PV，核心：监听 VuePress 路由变化，主动上报页面访问
+      document.addEventListener('vuepress:routeChanged', () => {
+        if (window._hmt) {
+          _hmt.push(['_trackPageview', window.location.pathname + window.location.hash]);
+        }
+      });
+    </script>
+    <meta name="description" content="Redis数据结构详解，系统讲解String、Hash、List、Set、ZSet五种核心结构的底层实现、使用场景、常见命令和面试追问，并扩展Stream、Bitmap、HyperLogLog、Geospatial等结构在消息流、去重、统计和排行榜场景中的应用。">
+    <meta property="article:modified_time" content="2026-05-25T07:50:35.000Z">
+    <meta property="og:site_name" content="卡码笔记｜程序员面试题库，Java、C++、Go、Agent、大模型八股文">
+    <meta property="og:title" content="Redis常见的数据结构有哪些？">
+    <meta property="og:description" content="Redis数据结构详解，系统讲解String、Hash、List、Set、ZSet五种核心结构的底层实现、使用场景、常见命令和面试追问，并扩展Stream、Bitmap、HyperLogLog、Geospatial等结构在消息流、去重、统计和排行榜场景中的应用。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="/base/redis-data-structures.html">
+    <meta name="twitter:title" content="Redis常见的数据结构有哪些？">
+    <meta name="twitter:description" content="Redis数据结构详解，系统讲解String、Hash、List、Set、ZSet五种核心结构的底层实现、使用场景、常见命令和面试追问，并扩展Stream、Bitmap、HyperLogLog、Geospatial等结构在消息流、去重、统计和排行榜场景中的应用。">
+    <meta name="twitter:url" content="/base/redis-data-structures.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:label2" content="Filed under">
+    <meta name="twitter:data2" content="Redis, 数据库面试题, 八股文">
+    <meta property="article:tag" content="Redis">
+    <meta name="keywords" content="Redis数据结构,Redis String,Redis Hash,Redis ZSet,Redis面试题,Redis八股文">
+    <meta name="tags" content="Redis,数据库面试题,八股文">
+    <meta name="theme-color" content="#3eaf7c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
+    <link rel="preload" href="/assets/css/0.styles.88f5c8c7.css" as="style"><link rel="preload" href="/assets/js/app.9998fd5e.js" as="script"><link rel="preload" href="/assets/js/2.a7b01108.js" as="script"><link rel="preload" href="/assets/js/1.86f1b283.js" as="script"><link rel="preload" href="/assets/js/87.3dea8428.js" as="script">
+    <link rel="stylesheet" href="/assets/css/0.styles.88f5c8c7.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container sidebar-open"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div> <a href="/" class="home-link router-link-active"><!----> <span class="site-name">卡码笔记-最强八股文</span></a> <div class="links"><!----> <nav class="nav-links can-hide"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav></div></header> <div class="sidebar-mask"></div> <aside class="sidebar"><nav class="nav-links"><div class="nav-item"><a href="/" class="nav-link">
+  首页
+</a></div><div class="nav-item"><a href="/base/" class="nav-link router-link-active">
+  计算机基础
+</a></div><div class="nav-item"><a href="/cpp/" class="nav-link">
+  C++
+</a></div><div class="nav-item"><a href="/java/" class="nav-link">
+  Java
+</a></div><div class="nav-item"><a href="/go/" class="nav-link">
+  Go
+</a></div><div class="nav-item"><a href="/llm/" class="nav-link">
+  🔥大模型🔥
+</a></div><div class="nav-item"><div class="dropdown-wrapper"><button type="button" aria-label="大厂面经" class="dropdown-title"><span class="title">大厂面经</span> <span class="arrow down"></span></button> <button type="button" aria-label="大厂面经" class="mobile-dropdown-title"><span class="title">大厂面经</span> <span class="arrow right"></span></button> <ul class="nav-dropdown" style="display:none;"><li class="dropdown-item"><!----> <a href="/interview/llm/" class="nav-link">
+  大模型面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/java/" class="nav-link">
+  Java面经
+</a></li><li class="dropdown-item"><!----> <a href="/interview/cpp/" class="nav-link">
+  C++面经
+</a></li></ul></div></div><div class="nav-item"><a href="https://github.com/youngyangyang04/llm-master" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  大模型Github
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div><div class="nav-item"><a href="https://programmercarl.com/" target="_blank" rel="noopener noreferrer" class="nav-link external">
+  代码随想录
+  <span><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg> <span class="sr-only">(opens new window)</span></span></a></div> <!----></nav>  <ul class="sidebar-links"><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>操作系统</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>网络</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading open"><span>数据库</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>SQL</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>索引</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>锁与MVCC</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>事务</span> <span class="arrow right"></span></p> <!----></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading open"><span>Redis</span> <span class="arrow down"></span></p> <ul class="sidebar-links sidebar-group-items"><li><a href="/base/redis-data-structures.html" aria-current="page" class="active sidebar-link">Redis常见的数据结构</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/base/redis-data-structures.html#简要回答" class="sidebar-link">简要回答</a></li><li class="sidebar-sub-header"><a href="/base/redis-data-structures.html#详细回答" class="sidebar-link">详细回答</a></li><li class="sidebar-sub-header"><a href="/base/redis-data-structures.html#知识图解" class="sidebar-link">知识图解</a></li><li class="sidebar-sub-header"><a href="/base/redis-data-structures.html#代码示例" class="sidebar-link">代码示例</a></li><li class="sidebar-sub-header"><a href="/base/redis-data-structures.html#知识扩展" class="sidebar-link">知识扩展</a></li></ul></li><li><a href="/base/redis-cache-eviction.html" class="sidebar-link">Redis缓存淘汰策略</a></li><li><a href="/base/redis-expiration-policies.html" class="sidebar-link">Redis过期策略</a></li><li><a href="/base/redis-persistence-rdb-aof.html" class="sidebar-link">Redis持久化机制：RDB和AOF</a></li><li><a href="/base/redis-cache-stampeding-penetration-avalanche.html" class="sidebar-link">缓存雪崩、穿透、击穿</a></li><li><a href="/base/redis-distributed-lock.html" class="sidebar-link">Redis分布式锁</a></li><li><a href="/base/redis-bloom-filter.html" class="sidebar-link">Redis布隆过滤器</a></li><li><a href="/base/redis-master-slave-synchronization.html" class="sidebar-link">Redis主从同步</a></li></ul></section></li><li><section class="sidebar-group collapsable is-sub-group depth-1"><p class="sidebar-heading"><span>其他</span> <span class="arrow right"></span></p> <!----></section></li></ul></section></li><li><section class="sidebar-group collapsable depth-0"><p class="sidebar-heading"><span>计算机组成原理</span> <span class="arrow right"></span></p> <!----></section></li></ul> </aside> <main class="page"> <div class="page-meta-host" style="display:none;"></div> <!----> <div class="theme-default-content content__default"><h1 id="redis常见的数据结构有哪些"><a href="#redis常见的数据结构有哪些" class="header-anchor">#</a> Redis常见的数据结构有哪些？</h1> <h2 id="简要回答"><a href="#简要回答" class="header-anchor">#</a> 简要回答</h2> <ul><li>Redis 最常见的数据结构有 <code>String</code>、<code>Hash</code>、<code>List</code>、<code>Set</code>、<code>ZSet</code>，如果再往后扩展，还有 <code>Stream</code>、<code>Bitmap</code>、<code>HyperLogLog</code> 和 <code>Geospatial</code>。前五种核心结构覆盖了 Redis 大部分业务场景。</li> <li><code>String</code> 适合缓存单值、计数器和分布式锁；<code>Hash</code> 适合存对象；<code>List</code> 适合消息队列和最新列表；<code>Set</code> 适合去重和交并集；<code>ZSet</code> 适合排行榜和延迟任务；<code>Stream</code> 适合消息流和消费者组。</li></ul> <h2 id="详细回答"><a href="#详细回答" class="header-anchor">#</a> 详细回答</h2> <ol><li>String
+<ul><li><p><code>String</code>是 Redis 最基础、最常用的数据结构，本质上是一段二进制安全的字符串，最大可存储 <code>512MB</code>。</p> <p>底层实现通常使用 SDS（简单动态字符串），相比 C 原生字符串更方便记录长度，也能减少缓冲区溢出问题。</p></li> <li><p>典型场景：</p> <ol><li>缓存单个对象或 JSON 字符串</li> <li>计数器，如点赞数、阅读量</li> <li>分布式锁，如 <code>set key value nx ex 10</code></li> <li><code>Bitmap</code>、<code>HyperLogLog</code> 的底层也都和 <code>String</code> 有关</li></ol></li></ul></li> <li>Hash
+<ul><li><code>Hash</code> 是 field-value 结构，一个key可以对应多个field，一个field对应一个value；适合存储对象的多个属性。外层的哈希使用HashTable实现，底层存储hash数据类型时会根据数据量选择更紧凑的编码ziplist或哈希表，大对象场景下通常会转成哈希表结构。</li> <li>典型场景：用户信息：<code>name</code>、<code>age</code>、<code>phone</code>；商品信息、配置项等。</li> <li>优点是可以只更新对象中的某个字段，不需要整块重写。</li></ul></li> <li>List
+<ul><li><p><code>List</code> 是有序、可重复的字符串列表，支持从左侧或右侧插入、弹出元素。</p> <p>主流版本中 <code>List</code> 底层组织方式是 <code>quicklist</code>，兼顾链表插入删除效率和紧凑存储能力。</p></li> <li><p>典型场景：消息队列、最新动态列表、评论时间线等</p></li></ul></li> <li>Set
+<ul><li><p><code>Set</code> 是无序、元素不可重复的集合。</p> <p>Redis 还支持集合间的交集、并集、差集运算，这也是Set的一个优势。</p></li> <li><p>典型场景：标签去重、共同好友、共同关注、抽奖名单、黑名单</p></li> <li><p>底层常见实现是整数集合或哈希表，具体取决于元素类型和数量。</p></li></ul></li> <li>ZSet
+<ul><li><p><code>ZSet</code>（有序集合）和 <code>Set</code> 一样元素不能重复，但每个元素都带有一个 <code>score</code>，Redis 会按分值排序。</p> <p>底层通常会组合使用跳表和哈希表，这样既能按分值排序，也能高效定位元素。</p></li> <li><p>典型场景：排行榜、延迟队列、热度榜、积分榜、范围查询，如分数区间、TopN</p></li></ul></li> <li>Stream
+<ul><li><p><code>Stream</code> 是 Redis 提供的消息流结构，适合需要消息持久化、消费位点、消费者组的场景。</p> <p>相比 <code>List</code>，<code>Stream</code> 在消息确认、重复消费控制、消费者组方面更完整。</p></li> <li><p>典型场景：消息队列、异步削峰、订单、日志流水</p></li></ul></li> <li>特殊结构
+<ul><li><code>Bitmap</code>：本质上是对 <code>String</code> 的位操作，适合签到、在线状态、活跃标记。</li> <li><code>HyperLogLog</code>：适合做海量 UV 去重统计，优点是内存占用小，缺点是有一定误差。</li> <li><code>Geospatial</code>：适合做附近的人、附近门店，本质能力建立在有序集合之上。</li></ul></li></ol> <h2 id="知识图解"><a href="#知识图解" class="header-anchor">#</a> 知识图解</h2> <ol><li>Redis 数据结构选型</li></ol> <table><thead><tr><th>需求场景</th> <th>推荐结构</th> <th>原因</th></tr></thead> <tbody><tr><td>缓存单值、Token、计数器</td> <td><code>String</code></td> <td>简单直接，命令丰富</td></tr> <tr><td>存对象属性</td> <td><code>Hash</code></td> <td>支持按字段读写，节省更新成本</td></tr> <tr><td>最新消息、任务队列</td> <td><code>List</code></td> <td>支持双端操作</td></tr> <tr><td>去重、共同关系</td> <td><code>Set</code></td> <td>元素唯一，支持交并差集</td></tr> <tr><td>排行榜、延迟队列</td> <td><code>ZSet</code></td> <td>可排序，可按分值范围查询</td></tr> <tr><td>消息流、消费者组</td> <td><code>Stream</code></td> <td>支持消息 ID 和消费组</td></tr></tbody></table> <ol start="2"><li>Redis Hash的两种编码方式示意
+<img src="https://file1.kamacoder.com/i/bagu/20260329_RedisHash.jpg" alt="image"></li></ol> <h2 id="代码示例"><a href="#代码示例" class="header-anchor">#</a> 代码示例</h2> <div class="language-redis line-numbers-mode"><pre class="language-text"><code>SET user:1:name &quot;tom&quot;
+INCR article:1001:view_count
+
+# Hash
+HSET user:1 name &quot;tom&quot; age 20 city &quot;shanghai&quot;
+HGET user:1 name
+
+# List
+LPUSH order:queue 1001 1002 1003
+RPOP order:queue
+
+# Set
+SADD tag:java user:1 user:2 user:3
+SISMEMBER tag:java user:2
+
+# ZSet
+ZADD rank:game 100 user:1 95 user:2 88 user:3
+ZREVRANGE rank:game 0 2 WITHSCORES
+
+# Stream
+XADD stream:order * orderId 1001 status created
+XREAD COUNT 1 STREAMS stream:order 0
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br><span class="line-number">17</span><br><span class="line-number">18</span><br><span class="line-number">19</span><br><span class="line-number">20</span><br><span class="line-number">21</span><br><span class="line-number">22</span><br></div></div><h2 id="知识扩展"><a href="#知识扩展" class="header-anchor">#</a> 知识扩展</h2> <ol><li>面试官可能追问：</li></ol> <ul><li><u>Q1</u>：Redis 为什么不用 C 原生字符串，而是使用 SDS？
+<ul><li>因为 SDS 会额外记录字符串长度，获取长度是 <code>O(1)</code>；同时预留空间机制更适合频繁修改，也能避免 C 字符串常见的缓冲区溢出问题。</li></ul></li> <li><u>Q2</u>：<code>ZSet</code> 为什么既要哈希表又要跳表？
+<ul><li>哈希表适合根据 member 快速定位 score，跳表适合按照 score 做有序范围查询。两者组合后，Redis 既能查得快，也能排得快。</li></ul></li> <li><u>Q3</u>：<code>List</code> 和 <code>Stream</code> 都能做消息队列，怎么选？
+<ul><li>如果只是简单异步队列，<code>List</code> 就够了；如果需要消费位点、消费者组、重试和更完整的消息语义，通常更适合用 <code>Stream</code>。</li></ul></li></ul></div> <footer class="page-edit"><!----> <div class="last-updated"><span class="prefix">Last Updated:</span> <span class="time">5/25/2026, 3:50:35 PM</span></div></footer> <div class="page-nav"><p class="inner"><span class="prev">
+      ←
+      <a href="/base/transaction-isolation-levels.html" class="prev">
+        说一说事务隔离级别
+      </a></span> <span class="next"><a href="/base/redis-cache-eviction.html">
+        Redis缓存淘汰策略
+      </a>
+      →
+    </span></p></div>  <div class="comments-wrapper" data-v-558649bb><div class="comments-header" data-v-558649bb><h3 class="comments-title" data-v-558649bb>评论</h3> <!----></div> <div class="comments-loading" data-v-558649bb><p data-v-558649bb>验证登录状态...</p></div> <!----> <!----> <!----></div></main> <aside class="page-sidebar"> <div class="page-side-toolbar"><div class="option-box"><img src="/images/system/toggle.png" width="30px" alt="侧边栏" class="nozoom"> <span class="show-txt">侧边栏</span></div> <div class="option-box"><img src="/images/system/dark.svg" width="30px" alt="夜间模式" class="nozoom"> <span class="show-txt">夜间</span></div> <div class="option-box"><a href="https://jianli.kamacoder.com/" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/2025-08-14kamajianli.jpg" width="25px" alt="卡码简历" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码简历</span></a></div> <div class="option-box"><a href="https://programmercarl.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/代码随想录.jpg" width="25px" alt="代码随想录" class="nozoom"> <span class="show-txt" style="margin-top: 5px">代码随想录</span></a></div> <div class="option-box"><a href="https://toudi.kamacoder.com" target="_blank" style="\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          text-decoration: none;\n        "><img src="/images/system/卡码投递表.jpg" width="25px" alt="卡码投递表" class="nozoom"> <span class="show-txt" style="margin-top: 5px">卡码投递表🔥</span></a></div> <div class="option-box"><img src="/images/system/实习校招202503.png" width="25px" alt="2026实习校招群" class="nozoom"> <span class="show-txt">2026群</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">添加客服微信</span> <img src="/assets/img/26校招.5e9d30da.jpg" height="180px" alt="2026实习校招客服微信" style="margin: 10px">
+            PS：通过微信后，请发送<b>姓名-学校-年级-2026实习/校招</b></div></div></div></div> <div class="option-box"><img src="/images/system/red-heart.png" width="25px" alt="支持卡码笔记" class="nozoom"> <span class="show-txt">支持卡码笔记</span> <div class="toc-container"><div class="pos-box"><div class="icon-arrow"></div> <div class="scroll-box" style="text-align: center"><span style="font-size: 0.8rem; font-weight: bold">鼓励/支持/赞赏Carl</span> <img height="180px" src="/assets/img/网站赞赏.69fb25a5.jpg" alt="卡码笔记赞赏码" style="margin: 5px"> <br>1.
+            如果感觉本站对你很有帮助，也可以请Carl喝杯奶茶，金额大小不重要，心意已经收下
+            <br>2. 希望大家都能梦想成真，有好的前程，加油💪
+          </div></div></div></div></div>  </aside></div><div class="global-ui"><!----></div></div>
+    <script src="/assets/js/app.9998fd5e.js" defer></script><script src="/assets/js/2.a7b01108.js" defer></script><script src="/assets/js/1.86f1b283.js" defer></script><script src="/assets/js/87.3dea8428.js" defer></script>
+  </body>
+</html>
