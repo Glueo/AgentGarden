@@ -9,6 +9,7 @@ import json
 import math
 import os
 import stat
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -32,6 +33,10 @@ def http_json(url: str, **params) -> tuple[bool, object]:
         with urllib.request.urlopen(request, timeout=5) as response:
             raw = response.read().decode("utf-8")
             return 200 <= response.status < 300, json.loads(raw) if raw else {"status": response.status}
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return False, None  # "not found" is a distinct signal, not a failure
+        return False, str(exc)
     except Exception as exc:
         return False, str(exc)
 
@@ -192,6 +197,9 @@ def persistent_archive_health(base_url: str, sessions_payload: object) -> dict:
             node_limit=ARCHIVE_NODE_LIMIT,
         )
         if not ok:
+            if listing is None:
+                # No history directory: the session has not committed yet.
+                continue
             errors.append(str(session.get("session_id") or uri))
             continue
         try:

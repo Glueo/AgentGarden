@@ -8,7 +8,7 @@ Agent Garden 是一套本机优先的人机协同知识系统：Hermes 负责交
 - 在 Obsidian 中查看或修改 `garden/`。
 - `resources/` 保存未经翻译、摘要或重写的源文件：网页使用原始 HTML，其他材料保持原始文件格式。
 - `wiki/` 保存由资源形成的翻译、摘要、知识沉淀和导航页面，并链接对应的 `resources/` 文件与原始 URL。
-- `wiki/`、`resources/` 会单向同步到 OpenViking；原始聊天只留在 OpenViking。
+- `wiki/` 单向同步到 OpenViking；`resources/` 只作为本地源文件归档，不上传 OpenViking。原始聊天只留在 OpenViking。
 - Hermes 的 bundled、official 与本地 Skills 由 Hermes 原生系统管理；Agent Garden 不再维护平行的 Skill 生成链路。
 - Hermes Desktop 当前保存的配置是唯一权威来源。Agent Garden 不覆盖主模型、Provider、fallback、辅助任务路由、子代理路由、Skills、Curator、Web、会话、终端或显示设置。
 - OpenViking 的 VLM 通过火山方舟固定使用 `doubao-seed-2-0-lite-260215`；会话提交后的异步记忆提取只消耗该模型的独立 Ark 额度，不使用 Camel、Qwen 或 Micu。

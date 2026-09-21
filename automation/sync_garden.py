@@ -24,7 +24,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 GARDEN_ROOT = PROJECT_ROOT / "garden"
 MANIFEST_PATH = PROJECT_ROOT / ".runtime/sync-manifest.json"
 PENDING_SNAPSHOT_PATH = PROJECT_ROOT / ".runtime/sync-snapshot-pending.json"
-SYNC_ROOTS = ("wiki", "resources")
+SYNC_ROOTS = ("wiki",)
 BASE_URI = os.environ.get("AGENT_GARDEN_VIKING_ROOT", "viking://user/gwen/resources/garden")
 TEXT_SUFFIXES = {".md", ".txt", ".py", ".json", ".yaml", ".yml", ".toml", ".csv", ".tsv", ".sh", ".zsh", ".js", ".ts", ".html", ".css"}
 SNAPSHOT_AMBIGUOUS_STATUS = (502, 503, 504)
@@ -760,7 +760,7 @@ def checked_local_path(relative: str) -> Path:
     return resolved
 
 
-def submission_entry(client, relative: str, metadata: dict, *, wait: bool, cleanup_uris: list[str] | None = None, cleanup_sources: dict | None = None, cleanup_attempts: dict | None = None, accepted_callback=None) -> dict:
+def submission_entry(client, relative: str, metadata: dict, *, wait: bool, cleanup_uris: list[str] | None = None, cleanup_sources: dict | None = None, cleanup_attempts: dict | None = None, accepted_callback=None, deleter=None) -> dict:
     if metadata["uri"] != uri_for(relative):
         raise ValueError("Upload URI does not match its expected source path")
     path = checked_local_path(relative)
@@ -774,6 +774,39 @@ def submission_entry(client, relative: str, metadata: dict, *, wait: bool, clean
     # Persist unidentified intent before submission: an exception can hide acceptance.
     if accepted_callback:
         accepted_callback(entry)
+    if Path(relative).suffix.lower() == ".md":
+        # Refined wiki markdown is stored verbatim. add_resource would parse
+        # and split long documents into a chunked tree, which exact readback
+        # cannot verify; write the raw content instead. A legacy chunked tree
+        # is replaced with a single file.
+        if remote_resource_is_parsed_tree(client, metadata["uri"]):
+            if deleter is None:
+                entry.update(status="failed", failure="parsed resource tree needs a deleter to replace")
+                return entry
+            deleter.delete(metadata["uri"])
+        try:
+            content = path.read_text(encoding="utf-8")
+        except (UnicodeError, OSError) as exc:
+            entry.update(status="failed", failure=f"text upload is not readable UTF-8: {exc}")
+            return entry
+        response = client.write(metadata["uri"], content, mode="replace", wait=wait) or {}
+        if not isinstance(response, dict):
+            raise AttributeError("malformed write response")
+        entry.pop("task_id", None)
+        if wait and response.get("queue_status"):
+            require_clean_queue(response["queue_status"])
+        try:
+            matches = verified_content(client, relative, metadata,
+                                       lambda source: checked_local_path(source).read_bytes())
+        except (OSError, ValueError) as exc:
+            entry.update(status="failed", failure=str(exc)[:500])
+            return entry
+        if matches:
+            entry.update({"status": "completed"})
+            entry.pop("failure", None)
+        else:
+            entry.update({"status": "failed", "failure": "uploaded text content differs on readback"})
+        return entry
     response = client.add_resource(
         str(path),
         to=metadata["uri"],
@@ -829,12 +862,14 @@ def apply_changes(client: SyncHTTPClient, changes: dict, old: dict, new: dict, w
             cleanup_sources=cleanup_sources,
             cleanup_attempts=old[source].get("cleanup_attempts"),
             accepted_callback=lambda entry, destination=destination: (files.__setitem__(destination, entry), save(files)),
+            deleter=deleter,
         )
         save(files)
     for relative in changes["add"]:
         files[relative] = submission_entry(
             client, relative, new[relative], wait=wait,
             accepted_callback=lambda entry, relative=relative: (files.__setitem__(relative, entry), save(files)),
+            deleter=deleter,
         )
         save(files)
     for relative in changes["modify"]:
@@ -850,6 +885,7 @@ def apply_changes(client: SyncHTTPClient, changes: dict, old: dict, new: dict, w
             cleanup_sources=cleanup_sources,
             cleanup_attempts=cleanup_attempts,
             accepted_callback=lambda entry, relative=relative: (files.__setitem__(relative, entry), save(files)),
+            deleter=deleter,
         )
         save(files)
     for relative in changes["delete"]:

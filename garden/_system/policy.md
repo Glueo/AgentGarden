@@ -4,7 +4,7 @@ kind: policy
 status: stable
 source_uris: []
 created: 2026-08-07
-updated: 2026-09-20
+updated: 2026-09-21
 topics: [agent-garden, autonomy, review]
 ---
 
@@ -28,4 +28,4 @@ topics: [agent-garden, autonomy, review]
 
 ## 同步边界
 
-`garden/wiki/` 与 `garden/resources/` 单向同步到 OpenViking。`resources/` 保留源文件原貌，`wiki/` 保存翻译与知识沉淀。原始会话、OpenViking 数据库和运行状态不写入 Git；稳定 Wiki 内容不由会话记忆反向覆盖。
+`garden/wiki/` 单向同步到 OpenViking。`resources/` 保留源文件原貌，仅作为本地归档，不参与同步；`wiki/` 保存翻译与知识沉淀。原始会话、OpenViking 数据库和运行状态不写入 Git；稳定 Wiki 内容不由会话记忆反向覆盖。

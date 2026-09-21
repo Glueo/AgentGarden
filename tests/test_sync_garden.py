@@ -28,6 +28,17 @@ class IsolatedSyncTests(unittest.TestCase):
 
 
 class SyncPlanTests(IsolatedSyncTests):
+    def test_scan_ignores_resources_directory_entirely(self):
+        for relative in ("resources/site/index.html", "resources/site/robots.txt",
+                         "resources/site/sitemap.xml", "wiki/a.md"):
+            path = sync_garden.GARDEN_ROOT / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("fixture", encoding="utf-8")
+        self.assertEqual(set(sync_garden.scan()), {"wiki/a.md"})
+        self.assertTrue(all((sync_garden.GARDEN_ROOT / p).is_file() for p in
+                            ("resources/site/index.html", "resources/site/robots.txt",
+                             "resources/site/sitemap.xml")))
+
     def test_manifest_accepts_exact_sha256_without_changing_case(self):
         for value in ("0123456789abcdef" * 4, "0123456789ABCDEF" * 4, "0123456789aBcDeF" * 4):
             with self.subTest(value=value):
@@ -96,17 +107,19 @@ class SyncPlanTests(IsolatedSyncTests):
         self.assertEqual(sync_garden.sync_exit_code({"wiki/a.md": {"status": "completed"}}), 0)
         self.assertEqual(sync_garden.sync_exit_code({"wiki/a.md": {"status": "failed"}}), 1)
 
-    def test_sync_scope_is_wiki_and_raw_resources(self):
-        self.assertEqual(sync_garden.SYNC_ROOTS, ("wiki", "resources"))
+    def test_sync_scope_is_wiki_only(self):
+        self.assertEqual(sync_garden.SYNC_ROOTS, ("wiki",))
 
-    def test_scan_includes_resource_html_and_ignores_legacy_sources(self):
-        (sync_garden.GARDEN_ROOT / "resources/page.html").write_bytes(b"<!doctype html><title>source</title>")
+    def test_scan_includes_wiki_and_ignores_resources_and_legacy_sources(self):
+        (sync_garden.GARDEN_ROOT / "wiki/page.html").write_bytes(b"<!doctype html><title>source</title>")
+        (sync_garden.GARDEN_ROOT / "resources/page.html").write_bytes(b"<!doctype html><title>archive</title>")
         (sync_garden.GARDEN_ROOT / "sources").mkdir()
         (sync_garden.GARDEN_ROOT / "sources/derived.md").write_text("processed", encoding="utf-8")
 
         scanned = sync_garden.scan()
 
-        self.assertIn("resources/page.html", scanned)
+        self.assertIn("wiki/page.html", scanned)
+        self.assertNotIn("resources/page.html", scanned)
         self.assertNotIn("sources/derived.md", scanned)
 
     def test_scan_rejects_symlink_even_when_it_points_to_a_file(self):
@@ -143,13 +156,16 @@ class SyncPlanTests(IsolatedSyncTests):
         new = {"wiki/a.md": {"sha256": "after", "uri": "same", "text": True}}
         self.assertEqual(sync_garden.plan_changes(old, new)["modify"], ["wiki/a.md"])
 
-    def test_modified_resource_uses_incremental_add_to_same_uri(self):
+    def test_modified_resource_writes_verbatim_to_same_uri(self):
         class Client:
             def __init__(self):
                 self.calls = []
 
-            def add_resource(self, path, **kwargs):
-                self.calls.append((path, kwargs))
+            def write(self, uri, content, mode="replace", wait=False, **kwargs):
+                self.calls.append((uri, content, mode, wait))
+
+            def download_bytes(self, uri):
+                return b"updated"
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -159,28 +175,25 @@ class SyncPlanTests(IsolatedSyncTests):
             sync_garden.GARDEN_ROOT = root
             try:
                 client = Client()
-                new = {"wiki/a.md": {"sha256": "after", "uri": sync_garden.uri_for("wiki/a.md"), "text": True}}
+                new = {"wiki/a.md": {"sha256": sync_garden.hash_bytes(b"updated"), "uri": sync_garden.uri_for("wiki/a.md"), "text": True}}
                 sync_garden.apply_changes(client, {"add": [], "modify": ["wiki/a.md"], "move": [], "delete": []}, {}, new, wait=False)
             finally:
                 sync_garden.GARDEN_ROOT = original
-        self.assertEqual(client.calls[0][1]["to"], sync_garden.uri_for("wiki/a.md"))
-        self.assertFalse(client.calls[0][1]["wait"])
+        self.assertEqual(client.calls[0][0], sync_garden.uri_for("wiki/a.md"))
+        self.assertEqual(client.calls[0][1], "updated")
+        self.assertFalse(client.calls[0][3])
 
-    def test_waited_submission_without_task_id_completes_after_exact_tree_readback(self):
+    def test_waited_markdown_write_completes_without_task_id(self):
         class Client:
-            def add_resource(self, path, **kwargs):
-                return {"root_uri": kwargs["to"], "queue_status": {}}
+            def __init__(self):
+                self.written = ""
 
-            def ls(self, uri, **kwargs):
-                return [{"uri": f"{uri}/a.md", "isDir": False}]
+            def write(self, uri, content, mode="replace", wait=False, **kwargs):
+                self.written = content
+                return {"queue_status": {}}
 
             def download_bytes(self, uri):
-                if uri.endswith("/a.md"):
-                    return b"hello"
-                raise IsADirectoryError(uri)
-
-            def wait_processed(self, **kwargs):
-                return {}
+                return self.written.encode("utf-8")
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -219,21 +232,13 @@ class SyncPlanTests(IsolatedSyncTests):
         )
         self.assertEqual(actual, b"content")
 
-    def test_waited_submission_without_task_id_fails_if_exact_tree_readback_differs(self):
+    def test_waited_markdown_write_fails_if_readback_differs(self):
         class Client:
-            def add_resource(self, path, **kwargs):
-                return {"root_uri": kwargs["to"], "queue_status": {}}
-
-            def ls(self, uri, **kwargs):
-                return [{"uri": f"{uri}/a.md", "isDir": False}]
+            def write(self, uri, content, mode="replace", wait=False, **kwargs):
+                return {"queue_status": {}}
 
             def download_bytes(self, uri):
-                if uri.endswith("/a.md"):
-                    return b"stale"
-                raise IsADirectoryError(uri)
-
-            def wait_processed(self, **kwargs):
-                return {}
+                return b"stale"
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -252,9 +257,8 @@ class SyncPlanTests(IsolatedSyncTests):
                 sync_garden.GARDEN_ROOT = original
 
         self.assertEqual(entry["status"], "failed")
-        self.assertEqual(entry["failure"], "waited add completed but remote content differs")
+        self.assertEqual(entry["failure"], "uploaded text content differs on readback")
         self.assertNotIn("task_id", entry)
-        self.assertTrue(sync_garden.original_upload_finished(Client(), entry))
 
     def test_markdown_verification_compares_openviking_canonical_body(self):
         local = b"---\nid: a\ntopics: [x]\n---\n\n# Title\n\nBody\n"
@@ -289,19 +293,19 @@ class SyncPlanTests(IsolatedSyncTests):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "resources").mkdir()
-            (root / "resources/page.html").write_bytes(b"<!doctype html><title>x</title>")
+            (root / "wiki").mkdir()
+            (root / "wiki/page.html").write_bytes(b"<!doctype html><title>x</title>")
             original = sync_garden.GARDEN_ROOT
             sync_garden.GARDEN_ROOT = root
             try:
                 entry = {
                     "sha256": sync_garden.hash_bytes(b"<!doctype html><title>x</title>"),
-                    "uri": sync_garden.uri_for("resources/page.html"),
+                    "uri": sync_garden.uri_for("wiki/page.html"),
                     "text": True,
                 }
                 client = ParsedClient()
                 ok = sync_garden.verified_content(
-                    client, "resources/page.html", entry,
+                    client, "wiki/page.html", entry,
                     lambda rel: (root / rel).read_bytes(),
                 )
             finally:
@@ -339,15 +343,15 @@ class SyncPlanTests(IsolatedSyncTests):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "resources").mkdir()
-            (root / "resources/page.html").write_bytes(local)
+            (root / "wiki").mkdir()
+            (root / "wiki/page.html").write_bytes(local)
             entry = {
                 "sha256": sync_garden.hash_bytes(local),
-                "uri": sync_garden.uri_for("resources/page.html"),
+                "uri": sync_garden.uri_for("wiki/page.html"),
                 "text": True,
             }
             self.assertTrue(sync_garden.verified_content(
-                ParsedClient(), "resources/page.html", entry,
+                ParsedClient(), "wiki/page.html", entry,
                 lambda rel: (root / rel).read_bytes(),
             ))
 
@@ -370,20 +374,20 @@ class SyncPlanTests(IsolatedSyncTests):
         local = b"<!doctype html><title>Fresh page</title><body><p>Fresh body changed substantially</p></body>"
         entry = {
             "sha256": sync_garden.hash_bytes(local),
-            "uri": sync_garden.uri_for("resources/page.html"),
+            "uri": sync_garden.uri_for("wiki/page.html"),
             "text": True,
         }
         for stale in (b"# Old page\n\nOld body\n", b"# Fresh page\n", b"# Fresh page\n\nOld body\n"):
             with self.subTest(stale=stale):
                 self.assertFalse(sync_garden.verified_content(
-                    ParsedClient(stale), "resources/page.html", entry, lambda rel: local,
+                    ParsedClient(stale), "wiki/page.html", entry, lambda rel: local,
                 ))
 
     def test_unreadable_regular_or_tree_resource_fails_closed(self):
         local = b"<!doctype html><title>Fresh page</title><body>Fresh body</body>"
         entry = {
             "sha256": sync_garden.hash_bytes(local),
-            "uri": sync_garden.uri_for("resources/page.html"),
+            "uri": sync_garden.uri_for("wiki/page.html"),
             "text": True,
         }
 
@@ -412,12 +416,12 @@ class SyncPlanTests(IsolatedSyncTests):
         for client in (UnreadableRegular(), UnreadableTree()):
             with self.subTest(client=type(client).__name__):
                 self.assertFalse(sync_garden.verified_content(
-                    client, "resources/page.html", entry, lambda rel: local,
+                    client, "wiki/page.html", entry, lambda rel: local,
                 ))
 
     def test_semantic_tree_fallback_is_restricted_to_html(self):
         local = b"Fresh page Fresh body"
-        uri = sync_garden.uri_for("resources/page.txt")
+        uri = sync_garden.uri_for("wiki/page.txt")
 
         class ParsedClient:
             def download_bytes(self, target):
@@ -432,7 +436,7 @@ class SyncPlanTests(IsolatedSyncTests):
                 return {"uri": target, "name": "page.txt", "isDir": True}
 
         self.assertFalse(sync_garden.verified_content(
-            ParsedClient(), "resources/page.txt",
+            ParsedClient(), "wiki/page.txt",
             {"sha256": sync_garden.hash_bytes(local), "uri": uri, "text": True},
             lambda rel: local,
         ))
@@ -463,7 +467,7 @@ class SyncPlanTests(IsolatedSyncTests):
 
     def test_direct_binary_readback_requires_exact_bytes(self):
         local = b"binary\x00payload\n"
-        uri = sync_garden.uri_for("resources/blob.bin")
+        uri = sync_garden.uri_for("wiki/blob.bin")
 
         class Client:
             def __init__(self, remote):
@@ -473,9 +477,9 @@ class SyncPlanTests(IsolatedSyncTests):
                 return self.remote
 
         entry = {"sha256": sync_garden.hash_bytes(local), "uri": uri, "text": False}
-        self.assertTrue(sync_garden.verified_content(Client(local), "resources/blob.bin", entry, lambda rel: local))
+        self.assertTrue(sync_garden.verified_content(Client(local), "wiki/blob.bin", entry, lambda rel: local))
         self.assertFalse(sync_garden.verified_content(
-            Client(local.rstrip()), "resources/blob.bin", entry, lambda rel: local,
+            Client(local.rstrip()), "wiki/blob.bin", entry, lambda rel: local,
         ))
 
     def test_snapshot_commit_recovers_ambiguous_success_without_retry(self):
@@ -675,8 +679,8 @@ class AsyncLifecycleTests(IsolatedSyncTests):
 
     def test_modified_pending_move_keeps_cleanup_uri(self):
         class Client:
-            def add_resource(self, path, **kwargs):
-                return {"task_id": "replacement"}
+            def write(self, uri, content, mode="replace", wait=False, **kwargs):
+                return {}
 
         old = {"wiki/new.md": {"sha256": "old", "uri": sync_garden.uri_for("wiki/new.md"), "text": True, "status": "failed", "cleanup_uris": [sync_garden.uri_for("wiki/old.md")]}}
         new = {"wiki/new.md": {"sha256": "new", "uri": sync_garden.uri_for("wiki/new.md"), "text": True}}
@@ -730,8 +734,8 @@ class AsyncLifecycleTests(IsolatedSyncTests):
 
     def test_first_move_checkpoint_replaces_source_atomically(self):
         class Client:
-            def add_resource(self, path, **kwargs):
-                return {"task_id": "move-task"}
+            def write(self, uri, content, mode="replace", wait=False, **kwargs):
+                return {}
 
         old = {"wiki/old.md": {"sha256": "same", "uri": sync_garden.uri_for("wiki/old.md"), "text": True, "status": "completed"}}
         new = {"wiki/new.md": {"sha256": "same", "uri": sync_garden.uri_for("wiki/new.md"), "text": True}}
@@ -798,8 +802,8 @@ class AsyncLifecycleTests(IsolatedSyncTests):
 
     def test_chained_move_preserves_all_cleanup_uris(self):
         class Client:
-            def add_resource(self, path, **kwargs):
-                return {"task_id": "next-move"}
+            def write(self, uri, content, mode="replace", wait=False, **kwargs):
+                return {}
 
         old = {
             "wiki/b.md": {
@@ -840,25 +844,28 @@ class AsyncLifecycleTests(IsolatedSyncTests):
             def __init__(self):
                 self.calls = 0
 
-            def add_resource(self, path, **kwargs):
+            def write(self, uri, content, mode="replace", wait=False, **kwargs):
                 self.calls += 1
                 if self.calls == 2:
                     raise ConnectionError("second failed")
-                return {"task_id": "first-task"}
+                return {}
+
+            def download_bytes(self, uri):
+                return uri.rsplit("/", 1)[-1].encode("utf-8")
 
         checkpoints = []
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "wiki").mkdir()
+            new = {}
             for name in ("a.md", "b.md"):
                 (root / "wiki" / name).write_text(name, encoding="utf-8")
+                relative = "wiki/" + name
+                new[relative] = {"sha256": sync_garden.hash_bytes(name.encode("utf-8")),
+                                 "uri": sync_garden.uri_for(relative), "text": True}
             original = sync_garden.GARDEN_ROOT
             sync_garden.GARDEN_ROOT = root
             try:
-                new = {
-                    name: {"sha256": name, "uri": sync_garden.uri_for(name), "text": True}
-                    for name in ("wiki/a.md", "wiki/b.md")
-                }
                 with self.assertRaises(ConnectionError):
                     sync_garden.apply_changes(
                         Client(),
@@ -870,7 +877,7 @@ class AsyncLifecycleTests(IsolatedSyncTests):
                     )
             finally:
                 sync_garden.GARDEN_ROOT = original
-        self.assertEqual(checkpoints[-1]["wiki/a.md"]["task_id"], "first-task")
+        self.assertEqual(checkpoints[-1]["wiki/a.md"]["status"], "completed")
 
     def test_wait_failure_after_acceptance_keeps_task_checkpoint(self):
         class Client:
@@ -884,21 +891,21 @@ class AsyncLifecycleTests(IsolatedSyncTests):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "wiki").mkdir()
-            (root / "wiki/a.md").write_text("a", encoding="utf-8")
+            (root / "wiki/a.txt").write_text("a", encoding="utf-8")
             original = sync_garden.GARDEN_ROOT
             sync_garden.GARDEN_ROOT = root
             try:
-                new = {"wiki/a.md": {"sha256": "a", "uri": sync_garden.uri_for("wiki/a.md"), "text": True}}
+                new = {"wiki/a.txt": {"sha256": "a", "uri": sync_garden.uri_for("wiki/a.txt"), "text": True}}
                 with self.assertRaises(TimeoutError):
                     sync_garden.apply_changes(
                         Client(),
-                        {"add": ["wiki/a.md"], "modify": [], "move": [], "delete": []},
+                        {"add": ["wiki/a.txt"], "modify": [], "move": [], "delete": []},
                         {}, new, wait=True,
                         checkpoint=lambda files: checkpoints.append({key: dict(value) for key, value in files.items()}),
                     )
             finally:
                 sync_garden.GARDEN_ROOT = original
-        self.assertEqual(checkpoints[-1]["wiki/a.md"]["task_id"], "accepted-task")
+        self.assertEqual(checkpoints[-1]["wiki/a.txt"]["task_id"], "accepted-task")
 
     def test_delete_is_waited_before_manifest_entry_is_removed(self):
         import json

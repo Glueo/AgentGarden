@@ -180,6 +180,22 @@ class SemanticHealthTests(unittest.TestCase):
             healthcheck.http_json = original
         self.assertEqual(report["enumeration_errors"], ["a:node_limit_reached"])
 
+    def test_sessions_without_history_archive_are_skipped_not_errors(self):
+        sessions = [
+            {"session_id": "active", "uri": "viking://session/active"},
+        ]
+        with patch.object(healthcheck, "http_json", return_value=(False, None)):
+            report = healthcheck.persistent_archive_health("http://127.0.0.1:1933", sessions)
+        self.assertEqual(report["enumeration_errors"], [])
+
+    def test_archive_listing_failure_is_still_reported(self):
+        sessions = [
+            {"session_id": "committed", "uri": "viking://session/committed"},
+        ]
+        with patch.object(healthcheck, "http_json", return_value=(False, "connection error")):
+            report = healthcheck.persistent_archive_health("http://127.0.0.1:1933", sessions)
+        self.assertIn("committed", report["enumeration_errors"])
+
     def test_malformed_session_records_are_reported_instead_of_skipped(self):
         records = [
             {"session_id": "s"},

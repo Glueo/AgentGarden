@@ -44,6 +44,13 @@ class ResourceClient:
     def download_bytes(self, uri):
         return self.objects.get(uri)
 
+    def stat(self, uri):
+        return {"isDir": False}
+
+    def write(self, uri, content, mode="replace", wait=False, **kwargs):
+        self.objects[uri] = content.encode("utf-8") if isinstance(content, str) else content
+        return {}
+
     def rm(self, uri, **kwargs):
         raise AssertionError("The SDK rm method discards semantic results and must not be used")
 
@@ -137,7 +144,7 @@ class CleanupRegressionTests(IsolatedGardenTests):
 
     def test_waited_upload_cannot_complete_with_stale_scan_digest(self):
         class UploadClient:
-            def add_resource(self, path, **kwargs):
+            def write(self, uri, content, mode="replace", wait=False, **kwargs):
                 return {"queue_status": {"Embedding": {"error_count": 0}}}
 
             def download_bytes(self, uri):
@@ -206,7 +213,7 @@ class ManifestScopeTests(IsolatedGardenTests):
     def test_cleanup_source_mapping_must_match_the_target_exactly(self):
         uri = sync_garden.uri_for("wiki/a.md")
         files = {"wiki/b.md": metadata("wiki/b.md", status="pending", cleanup_uris=[uri],
-                                       cleanup_sources={uri: "resources/a.md"})}
+                                       cleanup_sources={uri: "wiki/c.md"})}
         with self.assertRaises(ValueError):
             sync_garden.normalize_manifest({"version": 2, "files": files})
 
@@ -235,8 +242,11 @@ class ManifestScopeTests(IsolatedGardenTests):
 
     def test_new_move_records_exact_source_identity(self):
         class UploadClient:
-            def add_resource(self, path, **kwargs):
-                return {"task_id": "move-task"}
+            def write(self, uri, content, mode="replace", wait=False, **kwargs):
+                return {}
+
+            def download_bytes(self, uri):
+                return b"same"
 
         old = {"wiki/a.md": metadata("wiki/a.md", status="completed")}
         current = {"wiki/b.md": metadata("wiki/b.md")}
@@ -388,7 +398,7 @@ class ContentIntegrityTests(IsolatedGardenTests):
                 path.write_bytes(b"scanned")
 
                 class UploadClient:
-                    def add_resource(self, filename, **kwargs):
+                    def write(self, uri, content, mode="replace", wait=False, **kwargs):
                         if change_at == "upload":
                             path.write_bytes(b"changed")
                         return {"queue_status": {"Embedding": {"error_count": 0}}}
@@ -698,8 +708,8 @@ class RestartAndRenameTests(IsolatedGardenTests):
             return {"task_id": "replacement-task"}
 
     def test_upload_intent_retains_all_cleanup_provenance_before_submission(self):
-        prior = [sync_garden.uri_for("wiki/prior.md"), sync_garden.uri_for("resources/prior.md")]
-        sources = dict(zip(prior, ("wiki/prior.md", "resources/prior.md")))
+        prior = [sync_garden.uri_for("wiki/prior.md"), sync_garden.uri_for("wiki/prior2.md")]
+        sources = dict(zip(prior, ("wiki/prior.md", "wiki/prior2.md")))
         attempts = {uri: "semantic recovery required" for uri in prior}
         for action in ("modify", "move"):
             with self.subTest(action=action):
@@ -711,11 +721,11 @@ class RestartAndRenameTests(IsolatedGardenTests):
                 checkpoints, at_submit = [], []
                 client = MagicMock()
 
-                def interrupted(path, **kwargs):
+                def interrupted(*args, **kwargs):
                     at_submit.append(copy.deepcopy(checkpoints[-1]) if checkpoints else {})
                     raise TimeoutError("fixture accepted upload; response lost")
 
-                client.add_resource.side_effect = interrupted
+                client.write.side_effect = interrupted
                 with self.assertRaises(TimeoutError):
                     sync_garden.apply_changes(
                         client, sync_garden.plan_changes(old, current), old, current, wait=False,
@@ -789,18 +799,18 @@ class RestartAndRenameTests(IsolatedGardenTests):
             def add_resource(self, path, **kwargs):
                 return {}
 
-        uri = sync_garden.uri_for("wiki/a.md")
-        path = self.root / "wiki/a.md"
+        uri = sync_garden.uri_for("wiki/a.txt")
+        path = self.root / "wiki/a.txt"
         path.write_bytes(b"same")
         client = Client({uri: b"same"})
-        entry = sync_garden.submission_entry(client, "wiki/a.md", metadata("wiki/a.md"), wait=False)
+        entry = sync_garden.submission_entry(client, "wiki/a.txt", metadata("wiki/a.txt"), wait=False)
         path.unlink()
-        files = {"wiki/a.md": entry}
+        files = {"wiki/a.txt": entry}
         for _ in range(2):
             files = sync_garden.apply_changes(client, sync_garden.plan_changes(files, {}), files, {},
                                               wait=False, deleter=client)
         self.assertEqual(client.removed, [])
-        self.assertIn("wiki/a.md", files)
+        self.assertIn("wiki/a.txt", files)
         self.assertEqual(sync_garden.sync_exit_code(files), 1)
 
     def test_crash_after_remote_delete_leaves_a_recoverable_attempt_before_restart(self):
@@ -859,18 +869,18 @@ class SyncEntrypointTests(IsolatedGardenTests):
                         remote = {entry["uri"]: b"A" for entry in old.values()}
                         at_submit = []
 
-                        def accepted(path, **kwargs):
+                        def accepted(uri, content, **kwargs):
                             at_submit.append(json.loads(state.read_text(encoding="utf-8"))["files"])
-                            remote[kwargs["to"]] = Path(path).read_bytes()
+                            remote[uri] = path.read_bytes()
                             if failure is AttributeError:
                                 return ["malformed response"]
                             raise failure("fixture accepted upload; response lost")
 
-                        client.add_resource.side_effect = accepted
+                        client.write.side_effect = accepted
                         with patch("urllib.request.OpenerDirector.open", side_effect=AssertionError("unexpected HTTP")) as request:
                             with self.assertRaises(failure):
                                 self.run_main(client, wait=wait)
-                            client.add_resource.assert_called_once()
+                            client.write.assert_called_once()
                             client.close.assert_called_once()
                             saved = json.loads(state.read_text(encoding="utf-8"))["files"]
                             self.assertEqual(saved, at_submit[0])
@@ -893,9 +903,9 @@ class SyncEntrypointTests(IsolatedGardenTests):
                                 else:
                                     path.write_bytes(local)
                                 client.reset_mock()
-                                client.add_resource.side_effect = AssertionError("unknown upload must not be resubmitted")
+                                client.write.side_effect = AssertionError("unknown upload must not be resubmitted")
                                 self.assertEqual(self.run_main(client, wait=wait), 1)
-                                client.add_resource.assert_not_called()
+                                client.write.assert_not_called()
                                 client.rm.assert_not_called()
                                 client.download_bytes.assert_not_called()
                                 client.get_task.assert_not_called()
@@ -919,11 +929,11 @@ class SyncEntrypointTests(IsolatedGardenTests):
         client.snapshot.log.return_value = []
         client.snapshot.commit.return_value = {"result": "created", "commit_oid": "fixture-snapshot"}
 
-        def accepted(filename, **kwargs):
-            remote[kwargs["to"]] = Path(filename).read_bytes()
+        def accepted(uri, content, **kwargs):
+            remote[uri] = content.encode("utf-8") if isinstance(content, str) else content
             return {"queue_status": {"Embedding": {"error_count": 0}}}
 
-        client.add_resource.side_effect = accepted
+        client.write.side_effect = accepted
         client.download_bytes.side_effect = remote.get
         deleter.delete.side_effect = remote.pop
         with patch.object(sync_garden, "GardenDeletionHTTP", return_value=deleter), \
@@ -936,7 +946,7 @@ class SyncEntrypointTests(IsolatedGardenTests):
                 self.assertEqual(entry["sha256"], sync_garden.hash_bytes(content))
                 self.assertNotIn("task_id", entry)
                 self.assertEqual(remote[uri], content)
-            self.assertEqual(client.add_resource.call_count, 2)
+            self.assertEqual(client.write.call_count, 2)
             path.unlink()
             self.assertEqual(self.run_main(client, wait=True), 0)
             deleter.delete.assert_called_once_with(uri)
@@ -947,7 +957,7 @@ class SyncEntrypointTests(IsolatedGardenTests):
 
     def test_completed_v2_entries_remain_noop_without_cleanup_or_http(self):
         files = {}
-        for relative in ("wiki/a.md", "wiki/b.md", "resources/a.md", "resources/b.md"):
+        for relative in ("wiki/a.md", "wiki/b.md", "wiki/c.md", "wiki/d.md"):
             (self.root / relative).write_bytes(b"same")
             files[relative] = metadata(relative, status="completed")
         state = self.root / "manifest.json"

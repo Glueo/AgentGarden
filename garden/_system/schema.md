@@ -4,7 +4,7 @@ kind: schema
 status: stable
 source_uris: []
 created: 2026-08-07
-updated: 2026-09-20
+updated: 2026-09-21
 topics: [agent-garden, schema]
 ---
 
@@ -41,4 +41,5 @@ topics: []
 
 - 2026-08-07：建立生命周期目录和最小 frontmatter；未预设学科树。
 - 2026-09-20：明确 `resources/` 保存未经处理的源文件，`wiki/` 保存翻译与知识沉淀；网页源文件固定保存为原始 HTML。
+- 2026-09-21：同步范围收敛为仅 `wiki/`；`resources/` 作为本地源文件归档，不再单向同步到 OpenViking，已索引的 `resources/` 内容从 OpenViking 移除。
 
