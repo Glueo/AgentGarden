@@ -1,4 +1,4 @@
-# Agent Garden
+# Agent Garden —— 人机协同的知识 Wiki 与长期记忆系统
 
 Agent Garden 是一套本机优先的人机协同知识系统：Hermes 负责交互、执行与原生 Skills，OpenViking 保存会话、记忆和语义索引，Obsidian Garden 保存稳定知识，Git 提供版本历史。
 
