@@ -1,38 +1,159 @@
 # Agent Garden —— 人机协同的知识 Wiki 与长期记忆系统
 
-Agent Garden 是一套本机优先的人机协同知识系统：Hermes 负责交互、执行与原生 Skills，OpenViking 保存会话、记忆和语义索引，Obsidian Garden 保存稳定知识，Git 提供版本历史。
+Agent Garden 把人类判断、大模型执行、长期记忆和可版本化知识库组织成一个持续生长的协作系统。Hermes 是对话与执行入口，OpenViking 保存会话、长期记忆和语义索引，Obsidian Garden 承载可阅读、可链接、可编辑的稳定知识，Git 记录知识演化历史。
+
+## 系统做什么
+
+- **人机共同维护 Wiki**：人和 Agent 在同一个 Obsidian Vault 中整理知识、建立双向链接并维护主题导航。
+- **保存资料与知识形成过程**：`resources/` 归档外部材料的原始快照，`wiki/` 保存翻译、摘要、结构化笔记和长期知识。
+- **为 Hermes 提供长期记忆**：OpenViking 保存会话记忆，并为后续对话提供语义检索。
+- **同步稳定知识**：同步器把 `wiki/` 单向写入 OpenViking，使人工整理的知识可以在对话中被检索和引用。
+- **验证同步结果**：每次同步记录内容哈希、异步任务状态和远端回读结果，持续处理新增、修改、移动与删除。
+- **保留完整版本历史**：Wiki、系统规则和自动化代码由 Git 管理，可以审阅、比较和回滚。
+
+## 工作流程
+
+```text
+外部资料 ──→ resources/ 原始快照 ──→ 人与 Agent 整理 ──→ wiki/ 稳定知识
+                                                        │
+                                                        ├──→ Git 版本历史
+                                                        └──→ OpenViking 语义索引 ──→ Hermes 后续对话
+
+Hermes 对话 ──→ OpenViking 会话与长期记忆 ────────────────────────────────────┘
+```
+
+## 目录结构
+
+| 路径 | 用途 |
+| --- | --- |
+| `garden/resources/` | 外部网页、文档、仓库文件等原始快照 |
+| `garden/wiki/` | 翻译、摘要、结构化笔记、主题 Hub 与稳定知识 |
+| `garden/_system/` | Garden 的用途、写入政策和笔记 Schema |
+| `garden/.obsidian/` | Obsidian Vault 配置 |
+| `automation/` | 运行配置、Wiki 同步、健康检查和资料快照脚本 |
+| `launchd/` | OpenViking 服务与定时同步的 macOS LaunchAgent 模板 |
+| `.runtime/` | 本地同步清单和运行状态 |
+
+## 快速开始
+
+### 1. 准备环境
+
+需要 macOS、Miniconda、Hermes Agent、Obsidian，以及可调用火山方舟模型的 API Key。
+
+```bash
+git clone git@github.com:Glueo/AgentGarden.git
+cd AgentGarden
+conda env create -f environment.yml
+conda activate agent-garden
+```
+
+环境固定使用 Python 3.11、OpenViking 0.4.20 和 MCP 1.29.0。
+
+### 2. 配置 OpenViking
+
+在 `~/.openviking/ov.conf` 中写入火山方舟的 VLM 与 Embedding 配置：
+
+```json
+{
+  "vlm": {
+    "provider": "volcengine",
+    "api_key": "YOUR_VOLCENGINE_API_KEY",
+    "api_base": "https://ark.cn-beijing.volces.com/api/v3",
+    "model": "doubao-seed-2-0-lite-260215"
+  },
+  "embedding": {
+    "dense": {
+      "provider": "volcengine",
+      "api_key": "YOUR_VOLCENGINE_API_KEY",
+      "api_base": "https://ark.cn-beijing.volces.com/api/v3",
+      "model": "doubao-embedding-vision-251215",
+      "dimension": 1024,
+      "input": "multimodal",
+      "batch_size": 8
+    }
+  }
+}
+```
+
+初始化脚本会补全本地存储、服务地址和 Hermes 的 OpenViking 连接变量，并把配置文件权限设为 `0600`：
+
+```bash
+python automation/install_runtime.py
+```
+
+初始化完成后重启 Hermes，使新的 OpenViking 连接变量生效。
+
+### 3. 启动 OpenViking
+
+```bash
+openviking-server --config "$HOME/.openviking/ov.conf"
+```
+
+保持该终端运行。服务启动后监听 `http://127.0.0.1:1933`，后续命令在另一个终端执行。
+
+### 4. 完成首次同步
+
+先查看同步计划，再等待首次索引完成：
+
+```bash
+python automation/sync_garden.py --dry-run
+python automation/sync_garden.py --wait
+```
+
+最后运行健康检查：
+
+```bash
+python automation/healthcheck.py
+```
 
 ## 日常使用
 
-- 直接使用 Hermes；无需手动提示它读取记忆。
-- 在 Obsidian 中查看或修改 `garden/`。
-- `resources/` 保存未经翻译、摘要或重写的源文件：网页使用原始 HTML，其他材料保持原始文件格式。
-- `wiki/` 保存由资源形成的翻译、摘要、知识沉淀和导航页面，并链接对应的 `resources/` 文件与原始 URL。
-- `wiki/` 单向同步到 OpenViking；`resources/` 只作为本地源文件归档，不上传 OpenViking。原始聊天只留在 OpenViking。
-- Hermes 的 bundled、official 与本地 Skills 由 Hermes 原生系统管理；Agent Garden 不再维护平行的 Skill 生成链路。
-- Hermes Desktop 当前保存的配置是唯一权威来源。Agent Garden 不覆盖主模型、Provider、fallback、辅助任务路由、子代理路由、Skills、Curator、Web、会话、终端或显示设置。
-- OpenViking 的 VLM 通过火山方舟固定使用 `doubao-seed-2-0-lite-260215`；会话提交后的异步记忆提取只消耗该模型的独立 Ark 额度，不使用 Camel、Qwen 或 Micu。
-- Hermes 的 Web、模型和工具配置以 Desktop 当前值为准。
+1. **与 Hermes 对话**：会话和长期记忆由 OpenViking 保存，后续对话可以按语义检索已有记忆与 Wiki。
+2. **归档外部资料**：把网页原始 HTML、PDF、图片或仓库文件放入 `garden/resources/`。
+3. **沉淀稳定知识**：在 `garden/wiki/` 中编写翻译、摘要、结构化笔记和主题导航，并链接原始 URL 与对应资源文件。
+4. **使用 Obsidian 浏览与编辑**：将 `garden/` 作为 Vault 打开，通过双向链接和 Graph View 浏览知识关系。
+5. **同步到 OpenViking**：运行 `sync_garden.py`，或启用 LaunchAgent 每 15 分钟自动同步。
+6. **提交 Git 版本**：审阅 Wiki 变化后提交，让知识库保留清晰的演化历史。
 
-## 运行边界
+## 自动运行
 
-- OpenViking 只监听 `127.0.0.1:1933`。
-- API Key 保存在用户目录下，不进入本仓库；Hermes 凭证及模型路由由 Desktop 管理。
-- 首次安装前必须由用户在 `~/.openviking/ov.conf` 中预置火山方舟 VLM 凭据；`install_runtime.py` 只复用已经绑定到 Ark 官方 API 的凭据，不会从旧 Camel/OpenAI 配置或其他模型渠道迁移密钥。
-- `.runtime/`、OpenViking 数据库、原始会话与日志不进入 Git。
-- Agent Garden 不创建、复制或重定向 Hermes Skill 目录。
-- 同步 manifest v2 为每个资源记录 `accepted/pending/completed/failed` 与 `task_id`；异步受理不等于完成，只有任务终态成功且远端正文回读一致才完成。`healthcheck.py` 会区分 configured/available，并输出未恢复任务和同步积压。
-- 移动清理记录精确的来源路径，并在删除前检查当前文件和其他 manifest 记录。重新出现的来源文件保留，失效的删除请求随之撤销。
-- 删除使用公开 HTTP 接口同时校验语义刷新与目标不存在；部分失败保留 `delete_pending`、`cleanup_uris`、`cleanup_sources` 和 `cleanup_attempts`，供后续核验。
-- Skill 创建提醒、写入审批、后台审查和 Curator 行为均以 Desktop 当前配置为准。Curator 的 LLM consolidation 会让辅助模型分析重叠 Skill、建立 umbrella Skill 并归档被吸收的旧 Skill；是否启用由用户在 Hermes 中决定。
+`launchd/` 提供两个模板：
 
-常用自检：
+- `com.agent-garden.openviking.plist`：登录后启动并守护 OpenViking。
+- `com.agent-garden.sync.plist`：登录后启动同步，并每 15 分钟运行一次。
+
+模板包含当前部署使用的绝对路径。部署到其他目录时，先更新 plist 中的 Python 路径、项目路径、配置路径和日志路径，再安装：
 
 ```bash
-/opt/homebrew/Caskroom/miniconda/base/envs/agent-garden/bin/python automation/healthcheck.py
-/opt/homebrew/Caskroom/miniconda/base/envs/agent-garden/bin/python automation/sync_garden.py --dry-run
+mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs/AgentGarden"
+cp launchd/com.agent-garden.openviking.plist "$HOME/Library/LaunchAgents/"
+cp launchd/com.agent-garden.sync.plist "$HOME/Library/LaunchAgents/"
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.agent-garden.openviking.plist"
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.agent-garden.sync.plist"
 ```
 
-`--dry-run` 只显示本地变更计划。`changed=0` 仍须结合健康检查和远端正文校验判断；普通同步在存在未完成、失败或待清理记录时返回非零退出码。
+## 同步机制
 
-删除响应丢失、语义刷新失败、上传任务身份不明或旧清理记录缺乏来源证明时，同步器保留状态并等待人工核验，不会重复删除或把后续 404 当作恢复成功。恢复时先核对公开 task、fs/stat 接口、原操作快照及来源记录，再通过经批准的维护操作处理该目标；保留未核实的记录和数据。
+- 同步范围是 `garden/wiki/`；`resources/` 作为本地原始资料库供 Wiki 引用。
+- Markdown 使用原文写入并通过远端正文回读校验。
+- 默认同步采用异步语义处理；`--wait` 会等待本轮任务完成。
+- `.runtime/sync-manifest.json` 保存每个页面的哈希、URI、任务和清理状态。
+- 后续同步会继续核对待处理任务，并完成移动、删除和内容更新。
+- `healthcheck.py` 汇总服务状态、语义任务、会话归档和 Wiki 同步状态。
+
+## 当前部署身份
+
+仓库当前使用 OpenViking 账户 `default`、用户 `gwen`，Wiki 根 URI 为 `viking://user/gwen/resources/garden`。其他部署可以在以下位置统一替换身份：
+
+- `automation/install_runtime.py` 中的 OpenViking 环境变量与默认用户；
+- `automation/sync_garden.py` 中的 `BASE_URI` 和客户端用户；
+- `automation/healthcheck.py` 中的请求身份头；
+- `launchd/` 中的本机绝对路径。
+
+## 测试
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+运行数据位于 `.runtime/`、`~/.openviking/` 和 `~/Library/Application Support/agent-garden/`；日志位于 `~/Library/Logs/AgentGarden/`。凭据保存在本机 OpenViking 配置中。
