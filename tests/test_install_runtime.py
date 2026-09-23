@@ -131,6 +131,30 @@ class OpenVikingConfigTests(unittest.TestCase):
         self.assertEqual(patched["storage"]["transaction"], {"enabled": True})
         self.assertEqual(patched["custom_section"], existing["custom_section"])
 
+    def test_user_configured_memory_is_preserved(self):
+        existing = {
+            "memory": {"custom_templates_dir": "/user/templates", "other": True},
+        }
+        patched = install_runtime.patch_openviking_config(
+            existing,
+            vlm_key="ark-key",
+            embedding_key="embedding-key",
+        )
+        self.assertEqual(
+            patched["memory"],
+            {"custom_templates_dir": "/user/templates", "other": True},
+        )
+
+    def test_user_configured_auth_mode_is_preserved(self):
+        existing = {"server": {"auth_mode": "api_key", "root_api_key": "secret-root"}}
+        patched = install_runtime.patch_openviking_config(
+            existing,
+            vlm_key="ark-key",
+            embedding_key="embedding-key",
+        )
+        self.assertEqual(patched["server"]["auth_mode"], "api_key")
+        self.assertEqual(patched["server"]["root_api_key"], "secret-root")
+
     def test_empty_config_uses_the_fixed_doubao_wire_id(self):
         patched = install_runtime.patch_openviking_config(
             {},
