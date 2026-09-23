@@ -4,7 +4,7 @@ kind: policy
 status: stable
 source_uris: []
 created: 2026-08-07
-updated: 2026-09-21
+updated: 2026-09-23
 topics: [agent-garden, autonomy, review]
 ---
 
@@ -14,7 +14,7 @@ topics: [agent-garden, autonomy, review]
 
 - 用户明确表达的个人偏好可直接写入 OpenViking memory。
 - 稳定、可引用的显式知识可写入或合并 Wiki，并保留来源 URI。
-- 外部网页、文档与仓库文件先以原始格式保存到 `garden/resources/`；翻译、摘要、重组和知识沉淀写入 `garden/wiki/`，并链接对应源文件。
+- 外部网页、文档与仓库文件以原始格式保存到 `garden/resources/`；全文译文作为独立文件一同归档。摘要、学习结论和结构化知识写入 `garden/wiki/`，并链接原件与译文。
 - OpenViking 可从已提交会话中异步提取长期记忆；其 VLM 通过火山方舟固定使用 `doubao-seed-2-0-lite-260215`，不配置备用渠道或模型。
 - Skill 的创建、修改、审批、账本和后台维护由 Hermes 原生系统按 Desktop 当前配置执行。
 - 凭证、安全策略、删除、付费、公开发布、外部通信、医疗、法律和财务决策始终人工审查。
@@ -28,4 +28,4 @@ topics: [agent-garden, autonomy, review]
 
 ## 同步边界
 
-`garden/wiki/` 单向同步到 OpenViking。`resources/` 保留源文件原貌，仅作为本地归档，不参与同步；`wiki/` 保存翻译与知识沉淀。原始会话、OpenViking 数据库和运行状态不写入 Git；稳定 Wiki 内容不由会话记忆反向覆盖。
+`garden/wiki/` 单向同步到 OpenViking。`resources/` 保存原始快照与全文译文，仅作为本地归档；`wiki/` 保存知识沉淀与导航。原始会话、OpenViking 数据库和运行状态不写入 Git；稳定 Wiki 内容不由会话记忆反向覆盖。
