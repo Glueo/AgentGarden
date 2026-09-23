@@ -9,3 +9,6 @@ __pycache__/
 .coverage
 .openviking/
 .diagnostics/
+garden/wiki/
+garden/resources/
+garden/.obsidian/graph.json

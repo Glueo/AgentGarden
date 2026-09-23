@@ -5,7 +5,7 @@ Agent Garden 把人类判断、大模型执行、长期记忆和可版本化知�
 ## 系统做什么
 
 - **人机共同维护 Wiki**：人和 Agent 在同一个 Obsidian Vault 中整理知识、建立双向链接并维护主题导航。
-- **保存资料与知识形成过程**：`resources/` 归档外部材料的原始快照，`wiki/` 保存翻译、摘要、结构化笔记和长期知识。
+- **保存资料与知识形成过程**：`resources/` 归档外部材料的原始快照与全文译文，`wiki/` 保存摘要、学习结论、结构化笔记和长期知识。
 - **为 Hermes 提供长期记忆**：OpenViking 保存会话记忆，并为后续对话提供语义检索。
 - **同步稳定知识**：同步器把 `wiki/` 单向写入 OpenViking，使人工整理的知识可以在对话中被检索和引用。
 - **验证同步结果**：每次同步记录内容哈希、异步任务状态和远端回读结果，持续处理新增、修改、移动与删除。
@@ -14,7 +14,7 @@ Agent Garden 把人类判断、大模型执行、长期记忆和可版本化知�
 ## 工作流程
 
 ```text
-外部资料 ──→ resources/ 原始快照 ──→ 人与 Agent 整理 ──→ wiki/ 稳定知识
+外部资料 ──→ resources/ 原始快照与全文译文 ──→ 人与 Agent 整理 ──→ wiki/ 稳定知识
                                                         │
                                                         ├──→ Git 版本历史
                                                         └──→ OpenViking 语义索引 ──→ Hermes 后续对话
@@ -26,8 +26,8 @@ Hermes 对话 ──→ OpenViking 会话与长期记忆 ───────�
 
 | 路径 | 用途 |
 | --- | --- |
-| `garden/resources/` | 外部网页、文档、仓库文件等原始快照 |
-| `garden/wiki/` | 翻译、摘要、结构化笔记、主题 Hub 与稳定知识 |
+| `garden/resources/` | 外部网页、文档、仓库文件等原始快照及全文译文 |
+| `garden/wiki/` | 摘要、学习结论、结构化笔记、主题 Hub 与稳定知识 |
 | `garden/_system/` | Garden 的用途、写入政策和笔记 Schema |
 | `garden/.obsidian/` | Obsidian Vault 配置 |
 | `automation/` | 运行配置、Wiki 同步、健康检查和资料快照脚本 |
@@ -109,8 +109,8 @@ python automation/healthcheck.py
 ## 日常使用
 
 1. **与 Hermes 对话**：会话和长期记忆由 OpenViking 保存，后续对话可以按语义检索已有记忆与 Wiki。
-2. **归档外部资料**：把网页原始 HTML、PDF、图片或仓库文件放入 `garden/resources/`。
-3. **沉淀稳定知识**：在 `garden/wiki/` 中编写翻译、摘要、结构化笔记和主题导航，并链接原始 URL 与对应资源文件。
+2. **归档外部资料**：把网页原始 HTML、PDF、图片或仓库文件及其全文译文放入 `garden/resources/`。
+3. **沉淀稳定知识**：在 `garden/wiki/` 中编写摘要、学习结论、结构化笔记和主题导航，并链接原始 URL 与对应资源文件。
 4. **使用 Obsidian 浏览与编辑**：将 `garden/` 作为 Vault 打开，通过双向链接和 Graph View 浏览知识关系。
 5. **同步到 OpenViking**：运行 `sync_garden.py`，或启用 LaunchAgent 每 15 分钟自动同步。
 6. **提交 Git 版本**：审阅 Wiki 变化后提交，让知识库保留清晰的演化历史。
