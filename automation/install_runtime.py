@@ -38,7 +38,8 @@ def patch_openviking_config(existing: dict, *, vlm_key: str, embedding_key: str)
     config.setdefault("default_account", "default")
     config.setdefault("default_user", "gwen")
     server = config.setdefault("server", {})
-    server.update({"host": "127.0.0.1", "port": 1933, "auth_mode": "dev", "cors_origins": ["http://127.0.0.1:1933"]})
+    server.update({"host": "127.0.0.1", "port": 1933, "cors_origins": ["http://127.0.0.1:1933"]})
+    server.setdefault("auth_mode", "dev")
     storage = config.setdefault("storage", {})
     storage.setdefault("workspace", str(OV_DATA))
     storage.setdefault("agfs", {"backend": "local"})
@@ -63,10 +64,6 @@ def patch_openviking_config(existing: dict, *, vlm_key: str, embedding_key: str)
         "max_concurrent": 4,
         "timeout": 180.0,
     }
-    memory = config.setdefault("memory", {})
-    memory.pop("custom_templates_dir", None)
-    if not memory:
-        config.pop("memory")
     config.setdefault("rerank", {})
     config.setdefault("output_language_override", "")
     return config
